@@ -48,21 +48,15 @@ spec:
             memory: "1Gi"
             cpu: "1000m"
         livenessProbe:
-          exec:
-            command:
-            - /bin/sh
-            - -c
-            - "exec 3<>/dev/tcp/127.0.0.1/50051 && printf '\\x00\\x00\\x00\\x00\\x00' >&3"
+          tcpSocket:
+            port: 50051
           initialDelaySeconds: 10
           periodSeconds: 30
           timeoutSeconds: 3
           failureThreshold: 3
         readinessProbe:
-          exec:
-            command:
-            - /bin/sh
-            - -c
-            - "exec 3<>/dev/tcp/127.0.0.1/50051 && printf '\\x00\\x00\\x00\\x00\\x00' >&3"
+          tcpSocket:
+            port: 50051
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 2

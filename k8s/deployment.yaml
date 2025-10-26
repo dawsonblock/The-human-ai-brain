@@ -48,18 +48,24 @@ spec:
             memory: "1Gi"
             cpu: "1000m"
         livenessProbe:
-          tcpSocket:
-            port: 50051
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - grpc_health_probe -addr=127.0.0.1:50051 || exit 1
           initialDelaySeconds: 10
           periodSeconds: 30
           timeoutSeconds: 3
           failureThreshold: 3
         readinessProbe:
-          tcpSocket:
-            port: 50051
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - grpc_health_probe -addr=127.0.0.1:50051 -rpc-timeout=2s || exit 1
           initialDelaySeconds: 5
           periodSeconds: 10
-          timeoutSeconds: 2
+          timeoutSeconds: 3
           failureThreshold: 3
         volumeMounts:
         - name: checkpoint-storage

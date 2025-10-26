@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
       - name: brain-server
-        image: brain-fdqc:v3.1.0
+        image: brain-fdqc@sha256:<<IMAGE_DIGEST>>
         imagePullPolicy: IfNotPresent
         ports:
         - name: grpc

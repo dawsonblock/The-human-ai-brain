@@ -157,10 +157,6 @@ private:
 // Data augmentation utilities
 namespace augmentation {
     Eigen::VectorXd add_noise(const Eigen::VectorXd& input, Scalar std_dev);
-    Eigen::VectorXd rotate_image(const Eigen::VectorXd& image, int width, int height, Scalar angle);
-    Eigen::VectorXd flip_image(const Eigen::VectorXd& image, int width, int height, bool horizontal);
-    Eigen::VectorXd crop_image(const Eigen::VectorXd& image, int width, int height, 
-                               int crop_width, int crop_height);
     Eigen::VectorXd normalize(const Eigen::VectorXd& input, Scalar mean, Scalar std);
 }
 

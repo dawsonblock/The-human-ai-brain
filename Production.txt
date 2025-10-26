@@ -1,0 +1,470 @@
+"""
+Production optimization: Quantization, distillation, deployment
+"""
+
+import torch
+import torch.nn as nn
+from torch.quantization import quantize_dynamic, prepare_qat, convert
+import onnx
+import onnxruntime as ort
+from typing import Dict, List
+
+
+class ModelOptimizer:
+    """
+    Comprehensive optimization for production deployment
+    """
+    def __init__(self, model: nn.Module, config: FDQCConfig):
+        self.model = model
+        self.config = config
+    
+    # ============= 1. DYNAMIC QUANTIZATION =============
+    def quantize_dynamic(self) -> nn.Module:
+        """
+        Dynamic quantization (INT8) for inference
+        Reduces model size by ~4x with minimal accuracy loss
+        """
+        print("Applying dynamic quantization...")
+        
+        # Quantize Linear and LSTM layers
+        quantized_model = quantize_dynamic(
+            self.model,
+            {nn.Linear, nn.LSTM},
+            dtype=torch.qint8
+        )
+        
+        # Test size reduction
+        original_size = self._get_model_size(self.model)
+        quantized_size = self._get_model_size(quantized_model)
+        
+        print(f"✓ Model size: {original_size:.2f} MB → {quantized_size:.2f} MB")
+        print(f"  Compression: {original_size/quantized_size:.2f}x")
+        
+        return quantized_model
+    
+    # ============= 2. KNOWLEDGE DISTILLATION =============
+    def train_student_model(self,
+                           teacher_model: nn.Module,
+                           train_loader,
+                           n_epochs: int = 10,
+                           temperature: float = 3.0,
+                           alpha: float = 0.7) -> nn.Module:
+        """
+        Knowledge distillation: Train smaller student model
+        
+        Args:
+            teacher_model: Large pretrained model
+            train_loader: Training data
+            n_epochs: Training epochs
+            temperature: Softmax temperature for soft targets
+            alpha: Weight for distillation loss (vs hard label loss)
+            
+        Returns:
+            student_model: Compressed model
+        """
+        print("Training student model via knowledge distillation...")
+        
+        # Create smaller student architecture
+        student_model = self._create_student_architecture()
+        student_model = student_model.to(self.config.device)
+        
+        teacher_model.eval()
+        student_model.train()
+        
+        optimizer = torch.optim.Adam(student_model.parameters(), lr=1e-4)
+        
+        for epoch in range(n_epochs):
+            epoch_loss = 0
+            
+            for batch in train_loader:
+                # Get teacher predictions (soft targets)
+                with torch.no_grad():
+                    teacher_logits = teacher_model(batch)
+                    soft_targets = F.softmax(teacher_logits / temperature, dim=-1)
+                
+                # Get student predictions
+                student_logits = student_model(batch)
+                soft_predictions = F.log_softmax(student_logits / temperature, dim=-1)
+                
+                # Distillation loss (KL divergence)
+                distillation_loss = F.kl_div(
+                    soft_predictions,
+                    soft_targets,
+                    reduction='batchmean'
+                ) * (temperature ** 2)
+                
+                # Hard label loss
+                hard_loss = F.cross_entropy(student_logits, batch['labels'])
+                
+                # Combined loss
+                loss = alpha * distillation_loss + (1 - alpha) * hard_loss
+                
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                
+                epoch_loss += loss.item()
+            
+            print(f"Epoch {epoch+1}/{n_epochs}: Loss = {epoch_loss/len(train_loader):.4f}")
+        
+        print("✓ Student model trained")
+        return student_model
+    
+    def _create_student_architecture(self) -> nn.Module:
+        """Create smaller student model (50% size)"""
+        
+        class StudentFDQC(nn.Module):
+            def __init__(self, config):
+                super().__init__()
+                # Reduced dimensions
+                d_hidden = config.d_global // 2
+                
+                self.encoder = nn.Sequential(
+                    nn.Linear(config.d_global, d_hidden),
+                    nn.ReLU(),
+                    nn.Linear(d_hidden, config.n_wm_base)
+                )
+                
+                self.decoder = nn.Sequential(
+                    nn.Linear(config.n_wm_base, d_hidden),
+                    nn.ReLU(),
+                    nn.Linear(d_hidden, 10)  # n_actions
+                )
+            
+            def forward(self, x):
+                workspace = self.encoder(x)
+                logits = self.decoder(workspace)
+                return logits
+        
+        return StudentFDQC(self.config)
+    
+    # ============= 3. ONNX EXPORT =============
+    def export_to_onnx(self, 
+                       model: nn.Module,
+                       output_path: str = 'fdqc_model.onnx',
+                       opset_version: int = 14) -> str:
+        """
+        Export model to ONNX format for deployment
+        
+        Args:
+            model: PyTorch model
+            output_path: Save path
+            opset_version: ONNX opset version
+            
+        Returns:
+            output_path: Path to saved ONNX model
+        """
+        print("Exporting to ONNX...")
+        
+        model.eval()
+        
+        # Dummy input
+        dummy_input = torch.randn(1, self.config.d_global).to(self.config.device)
+        
+        # Export
+        torch.onnx.export(
+            model,
+            dummy_input,
+            output_path,
+            export_params=True,
+            opset_version=opset_version,
+            do_constant_folding=True,
+            input_names=['input'],
+            output_names=['output'],
+            dynamic_axes={
+                'input': {0: 'batch_size'},
+                'output': {0: 'batch_size'}
+            }
+        )
+        
+        # Verify
+        onnx_model = onnx.load(output_path)
+        onnx.checker.check_model(onnx_model)
+        
+        print(f"✓ ONNX model saved to: {output_path}")
+        
+        # Test inference
+        self._test_onnx_inference(output_path, dummy_input)
+        
+        return output_path
+    
+    def _test_onnx_inference(self, onnx_path: str, test_input: torch.Tensor):
+        """Test ONNX model inference speed"""
+        
+        ort_session = ort.InferenceSession(onnx_path)
+        
+        # Prepare input
+        input_numpy = test_input.cpu().numpy()
+        
+        # Benchmark
+        import time
+        n_runs = 100
+        
+        start = time.time()
+        for _ in range(n_runs):
+            ort_inputs = {ort_session.get_inputs()[0].name: input_numpy}
+            ort_outputs = ort_session.run(None, ort_inputs)
+        end = time.time()
+        
+        avg_time = (end - start) / n_runs * 1000  # ms
+        print(f"  ONNX inference: {avg_time:.2f} ms/sample")
+    
+    # ============= 4. PRUNING =============
+    def prune_model(self, 
+                   model: nn.Module,
+                   sparsity: float = 0.3) -> nn.Module:
+        """
+        Structured pruning: Remove least important weights
+        
+        Args:
+            model: Model to prune
+            sparsity: Fraction of weights to remove
+            
+        Returns:
+            pruned_model: Pruned model
+        """
+        print(f"Pruning model (sparsity={sparsity:.1%})...")
+        
+        import torch.nn.utils.prune as prune
+        
+        # Apply L1 unstructured pruning to Linear layers
+        parameters_to_prune = []
+        for name, module in model.named_modules():
+            if isinstance(module, nn.Linear):
+                parameters_to_prune.append((module, 'weight'))
+        
+        prune.global_unstructured(
+            parameters_to_prune,
+            pruning_method=prune.L1Unstructured,
+            amount=sparsity
+        )
+        
+        # Make pruning permanent
+        for module, param_name in parameters_to_prune:
+            prune.remove(module, param_name)
+        
+        # Count remaining parameters
+        total_params = sum(p.numel() for p in model.parameters())
+        nonzero_params = sum((p != 0).sum().item() for p in model.parameters())
+        actual_sparsity = 1 - (nonzero_params / total_params)
+        
+        print(f"✓ Actual sparsity: {actual_sparsity:.1%}")
+        print(f"  Parameters: {total_params} → {nonzero_params}")
+        
+        return model
+    
+    # ============= 5. DEPLOYMENT PACKAGE =============
+    def create_deployment_package(self,
+                                 model: nn.Module,
+                                 output_dir: str = './deployment'):
+        """
+        Create complete deployment package
+        
+        Includes:
+        - Quantized model
+        - ONNX export
+        - Pruned model
+        - Configuration files
+        - Inference script
+        """
+        import os
+        os.makedirs(output_dir, exist_ok=True)
+        
+        print("=" * 60)
+        print("Creating deployment package...")
+        print("=" * 60)
+        
+        # 1. Quantized model
+        quantized = self.quantize_dynamic()
+        torch.save(quantized.state_dict(), f'{output_dir}/model_quantized.pth')
+        print("✓ Quantized model saved")
+        
+        # 2. ONNX export
+        onnx_path = self.export_to_onnx(model, f'{output_dir}/model.onnx')
+        print("✓ ONNX model saved")
+        
+        # 3. Pruned model
+        pruned = self.prune_model(model, sparsity=0.3)
+        torch.save(pruned.state_dict(), f'{output_dir}/model_pruned.pth')
+        print("✓ Pruned model saved")
+        
+        # 4. Configuration
+        config_dict = {
+            'd_global': self.config.d_global,
+            'n_wm_base': self.config.n_wm_base,
+            'n_wm_levels': self.config.n_wm_levels,
+            'beta': self.config.beta,
+            'f_c': self.config.f_c
+        }
+        import json
+        with open(f'{output_dir}/config.json', 'w') as f:
+            json.dump(config_dict, f, indent=2)
+        print("✓ Configuration saved")
+        
+        # 5. Inference script
+        self._create_inference_script(output_dir)
+        print("✓ Inference script saved")
+        
+        print("=" * 60)
+        print(f"Deployment package ready in: {output_dir}")
+        print("=" * 60)
+    
+    def _create_inference_script(self, output_dir: str):
+        """Generate standalone inference script"""
+        
+        script = """
+import torch
+import onnxruntime as ort
+import numpy as np
+import json
+
+class FDQCInference:
+    def __init__(self, model_path='model.onnx', config_path='config.json'):
+        # Load configuration
+        with open(config_path, 'r') as f:
+            self.config = json.load(f)
+        
+        # Load ONNX model
+        self.session = ort.InferenceSession(model_path)
+        
+    def predict(self, input_data):
+        '''
+        Run inference
+        
+        Args:
+            input_data: numpy array (batch, d_global)
+            
+        Returns:
+            predictions: numpy array (batch, n_actions)
+        '''
+        # Prepare input
+        ort_inputs = {self.session.get_inputs()[0].name: input_data}
+        
+        # Run inference
+        ort_outputs = self.session.run(None, ort_inputs)
+        
+        return ort_outputs[0]
+    
+    def predict_single(self, input_vector):
+        '''Single sample prediction'''
+        input_batch = np.expand_dims(input_vector, axis=0)
+        output_batch = self.predict(input_batch)
+        return output_batch[0]
+
+# Example usage
+if __name__ == '__main__':
+    model = FDQCInference()
+    
+    # Test input
+    test_input = np.random.randn(60).astype(np.float32)
+    
+    # Predict
+    output = model.predict_single(test_input)
+    print(f"Output: {output}")
+    print(f"Predicted action: {np.argmax(output)}")
+"""
+        
+        with open(f'{output_dir}/inference.py', 'w') as f:
+            f.write(script)
+    
+    # ============= UTILITY =============
+    def _get_model_size(self, model: nn.Module) -> float:
+        """Get model size in MB"""
+        torch.save(model.state_dict(), "/tmp/temp_model.pth")
+        size_mb = os.path.getsize("/tmp/temp_model.pth") / (1024 ** 2)
+        os.remove("/tmp/temp_model.pth")
+        return size_mb
+
+
+# ============= PERFORMANCE BENCHMARKING =============
+
+class PerformanceBenchmark:
+    """Comprehensive performance testing"""
+    
+    @staticmethod
+    def benchmark_inference_speed(model: nn.Module,
+                                  input_shape: Tuple[int, ...],
+                                  n_iterations: int = 1000,
+                                  device: str = 'cuda') -> Dict[str, float]:
+        """
+        Benchmark inference latency and throughput
+        """
+        import time
+        
+        model.eval()
+        model = model.to(device)
+        
+        # Warm-up
+        dummy_input = torch.randn(input_shape).to(device)
+        with torch.no_grad():
+            for _ in range(10):
+                _ = model(dummy_input)
+        
+        # Benchmark
+        torch.cuda.synchronize() if device == 'cuda' else None
+        
+        start = time.time()
+        with torch.no_grad():
+            for _ in range(n_iterations):
+                _ = model(dummy_input)
+        
+        torch.cuda.synchronize() if device == 'cuda' else None
+        end = time.time()
+        
+        # Metrics
+        total_time = end - start
+        avg_latency = (total_time / n_iterations) * 1000  # ms
+        throughput = n_iterations / total_time  # samples/sec
+        
+        return {
+            'avg_latency_ms': avg_latency,
+            'throughput_samples_per_sec': throughput,
+            'total_time_sec': total_time
+        }
+    
+    @staticmethod
+    def compare_optimizations(original_model: nn.Module,
+                            optimized_models: Dict[str, nn.Module],
+                            input_shape: Tuple[int, ...]) -> pd.DataFrame:
+        """
+        Compare different optimization strategies
+        """
+        results = []
+        
+        # Benchmark original
+        print("Benchmarking original model...")
+        orig_perf = PerformanceBenchmark.benchmark_inference_speed(
+            original_model, input_shape
+        )
+        results.append({
+            'model': 'Original',
+            'latency_ms': orig_perf['avg_latency_ms'],
+            'throughput': orig_perf['throughput_samples_per_sec'],
+            'size_mb': ModelOptimizer(original_model, None)._get_model_size(original_model)
+        })
+        
+        # Benchmark optimized versions
+        for name, model in optimized_models.items():
+            print(f"Benchmarking {name}...")
+            perf = PerformanceBenchmark.benchmark_inference_speed(model, input_shape)
+            results.append({
+                'model': name,
+                'latency_ms': perf['avg_latency_ms'],
+                'throughput': perf['throughput_samples_per_sec'],
+                'size_mb': ModelOptimizer(model, None)._get_model_size(model)
+            })
+        
+        # Create comparison table
+        df = pd.DataFrame(results)
+        
+        # Add speedup columns
+        df['latency_speedup'] = df['latency_ms'].iloc[0] / df['latency_ms']
+        df['size_reduction'] = df['size_mb'].iloc[0] / df['size_mb']
+        
+        print("\n" + "=" * 60)
+        print("Performance Comparison")
+        print("=" * 60)
+        print(df.to_string(index=False))
+        print("=" * 60)
+        
+        return df

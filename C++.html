@@ -1,0 +1,481 @@
+<html>
+<head>
+<meta charset="UTF-8">
+</head>
+<body>
+
+<p class="p1"><span class="s1">Upgraded C++-first build. Copy–paste ready. Cross-platform. SIMD+OpenMP. CPTP-safe integrator. gRPC+mTLS. Prometheus. GTest. Optional Python bindings.</span></p>
+<p class="p2"><span class="s1"></span><br></p>
+<p class="p3"><span class="s2"><h1><span class="s1">0) Repo</span></h1></span></p>
+
+
+<pre><code>human-ai-brain/
+  kernel/                 # C++17 core (GW, QW, Decoder), gRPC, metrics, audit
+    include/brain/
+    src/
+    proto/
+    tests/
+    cmake/
+  configs/
+  certs/
+  docker/
+  third_party/            # vendored or vcpkg-installed deps</code></pre>
+
+
+<p class="p1"><span class="s1"><h1><span class="s1">1) Core math (C++)</span></h1></span></p>
+<p class="p1"><span class="s1"><ul><li>
+<p class="p1"><span class="s1">GW: 3-layer MLP, GELU, LayerNorm, hard top-k forward, soft grad not needed (inference); for training use Python bindings or a C++ autograd lib if desired.</span></p>
+</li><li>
+<p class="p1"><span class="s1">QW: Lindblad with operator-splitting: unitary via expm, dissipators via Kraus. PSD+trace projection each step. Collapse on </span><span class="s2">S(\rho)\ge\log n-\epsilon</span><span class="s1"> or dwell limit.</span></p>
+</li><li>
+<p class="p1"><span class="s1">Measurement: </span><span class="s2">\Pi_i=U|i\rangle\langle i|U^\dagger</span><span class="s1">. In train mode expose soft probs; in prod sample y and set </span><span class="s2">\rho=\Pi_y</span><span class="s1">.</span></p>
+</li><li>
+<p class="p1"><span class="s1">Decoder: Quantized MLP; final ternary layer </span><span class="s2">\{-1,0,1\}</span><span class="s1">.</span></p>
+</li></ul></span></p>
+<p class="p2"><span class="s2"></span><br></p>
+<p class="p1"><span class="s1"><h1><span class="s1">2) Dependencies</span></h1></span></p>
+<p class="p1"><span class="s1"><ul><li>
+<p class="p1"><span class="s1">Eigen3, Protobuf+gRPC, Prometheus-cpp, yaml-cpp, libsodium, abseil, OpenSSL.</span></p>
+</li><li>
+<p class="p1"><span class="s1">Optional: OpenMP, fmt, spdlog.</span></p>
+</li><li>
+<p class="p1"><span class="s1">Install via vcpkg:</span></p>
+</li></ul></span></p>
+
+
+<pre><code>vcpkg install eigen3 grpc prometheus-cpp openssl yaml-cpp libsodium abseil fmt spdlog</code></pre>
+
+
+<p class="p1"><span class="s1"><h1><span class="s1">3) CMake (kernel/CMakeLists.txt)</span></h1></span></p>
+
+
+<pre><code>cmake_minimum_required(VERSION 3.21)
+project(human_ai_brain CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# Options
+option(HAB_ENABLE_OPENMP &quot;Enable OpenMP&quot; ON)
+option(HAB_ENABLE_MTLS    &quot;Enable mTLS&quot;  ON)
+option(HAB_ENABLE_SIMD    &quot;Enable SIMD&quot;  ON)
+
+# SIMD
+if(HAB_ENABLE_SIMD)
+  if(MSVC)
+    add_compile_options(/arch:AVX2)
+  else()
+    add_compile_options(-march=native -mfma -mavx2)
+  endif()
+endif()
+
+# OpenMP
+if(HAB_ENABLE_OPENMP)
+  find_package(OpenMP)
+  if(OpenMP_CXX_FOUND) add_compile_options(${OpenMP_CXX_FLAGS}) endif()
+endif()
+
+# vcpkg find
+find_package(Eigen3 REQUIRED)
+find_package(gRPC REQUIRED)
+find_package(Protobuf REQUIRED)
+find_package(prometheus-cpp CONFIG REQUIRED)
+find_package(yaml-cpp CONFIG REQUIRED)
+find_package(sodium REQUIRED)
+find_package(OpenSSL REQUIRED)
+find_package(absl CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+
+# Protos
+set(PROTO_SRC ${CMAKE_CURRENT_SOURCE_DIR}/proto/brain.proto)
+protobuf_generate_cpp(PROTO_HDRS PROTO_SRCS ${PROTO_SRC})
+grpc_generate_cpp(GRPC_HDRS GRPC_SRCS ${PROTO_SRC})
+
+add_library(brain_core
+  src/gw.cpp src/qw.cpp src/decoder.cpp
+  src/stepper.cpp src/measurement.cpp src/entropy.cpp
+  src/audit.cpp src/config.cpp src/metrics.cpp
+  ${PROTO_SRCS} ${GRPC_SRCS})
+target_include_directories(brain_core PUBLIC include ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(brain_core
+  Eigen3::Eigen protobuf::libprotobuf gRPC::grpc++ yaml-cpp
+  prometheus-cpp::pull spdlog::spdlog fmt::fmt sodium OpenSSL::SSL OpenSSL::Crypto absl::strings)
+
+add_executable(brain_ai_server src/server.cpp)
+target_link_libraries(brain_ai_server brain_core)
+
+enable_testing()
+add_executable(qw_tests tests/qw_tests.cpp)
+target_link_libraries(qw_tests brain_core gtest gtest_main)
+add_test(NAME qw_tests COMMAND qw_tests)</code></pre>
+
+
+<p class="p1"><span class="s1"><h1><span class="s1">4) gRPC proto (kernel/proto/brain.proto)</span></h1></span></p>
+
+
+<pre><code>syntax = &quot;proto3&quot;;
+package hab;
+
+service Brain {
+  rpc Health(HealthReq) returns (HealthResp);
+  rpc Step(StepReq) returns (StepResp);                  // one cognitive step
+  rpc GetState(StateReq) returns (StateResp);            // rho, entropy
+  rpc StreamInference(stream StepReq) returns (stream StepResp);
+}
+
+message HealthReq {}
+message HealthResp { string status = 1; }
+
+message StepReq {
+  repeated float gw = 1;        // 60-D GW vector (post top-k)
+  uint64  ticks = 2;            // substeps to integrate
+  bool    collapse = 3;         // allow collapse this call
+}
+
+message StepResp {
+  bool collapsed = 1;
+  uint32 y = 2;                 // chosen state if collapsed
+  repeated float action = 3;    // decoder output
+  double entropy = 4;           // S(rho)
+  double latency_ms = 5;
+}
+
+message StateReq { bool full_matrix = 1; }
+message StateResp {
+  double entropy = 1;
+  repeated double rho = 2;      // row-major n*n if requested
+}</code></pre>
+
+
+<p class="p1"><span class="s1"><h1><span class="s1">5) Headers (key classes)</span></h1></span></p>
+<p class="p2"><span class="s2"></span><br></p>
+<p class="p3"><span class="s3">include/brain/qw.hpp</span></p>
+
+
+<pre><code>#pragma once
+#include &lt;Eigen/Dense&gt;
+struct QWConfig {
+  int n = 7;
+  double dt = 1e-3;
+  double entropy_eps = 0.03;
+  int max_dwell_ticks = 120;
+};
+class QuantumWorkspace {
+public:
+  explicit QuantumWorkspace(const QWConfig&amp;);
+  void reset();
+  // H(g) where g is 60-D
+  void set_hamiltonian(const Eigen::VectorXd&amp; g);
+  // One CPTP step: unitary expm + Kraus dissipator + PSD+trace projection
+  void step();
+  // Multiple steps
+  void step_ticks(size_t ticks);
+  // Collapse if trigger met; returns true if collapsed and sets y
+  bool maybe_collapse(uint32_t&amp; y);
+  // Probs p_i = Tr(Pi_i rho)
+  Eigen::VectorXd probs() const;
+  // Accessors
+  const Eigen::MatrixXcd&amp; rho() const { return rho_; }
+  double entropy() const;
+  void set_unitary_basis(const Eigen::MatrixXcd&amp; U); // measurement basis
+private:
+  QWConfig cfg_;
+  Eigen::MatrixXcd rho_, U_;      // state and measurement basis
+  Eigen::MatrixXcd H_;            // Hermitian
+  // cached Kraus operators
+  std::vector&lt;Eigen::MatrixXcd&gt; K_;
+  void unitary_step_();           // rho = Ustep * rho * Ustep^\dagger
+  void dissipate_kraus_();        // rho = sum K rho K^\dagger
+  void psd_trace_project_();      // clamp eigenvalues, renorm trace
+  void build_kraus_();            // from decoherence params
+};</code></pre>
+
+
+<p class="p1"><span class="s1">include/brain/gw.hpp</span></p>
+
+
+<pre><code>#pragma once
+#include &lt;Eigen/Dense&gt;
+struct GWSizes { int d0, d1, d2, gout = 60, k = 12; };
+class GlobalWorkspace {
+public:
+  explicit GlobalWorkspace(const GWSizes&amp;);
+  Eigen::VectorXd forward(const Eigen::VectorXd&amp; z0); // returns 60-D top-k masked
+private:
+  // weights
+  Eigen::MatrixXd W1_, W2_, W3_;
+  Eigen::VectorXd b1_, b2_, b3_;
+  GWSizes sz_;
+  Eigen::VectorXd gelu_ln_(const Eigen::VectorXd&amp; x) const;
+};</code></pre>
+
+
+<p class="p1"><span class="s1">include/brain/decoder.hpp</span></p>
+
+
+<pre><code>#pragma once
+#include &lt;Eigen/Dense&gt;
+struct DecConfig { int din, dout; };
+class Decoder {
+public:
+  explicit Decoder(const DecConfig&amp;);
+  Eigen::VectorXd forward(const Eigen::VectorXd&amp; h) const; // ternary last layer
+private:
+  Eigen::MatrixXd W1_;
+  Eigen::VectorXd b1_;
+  Eigen::Matrix&lt;int8_t, Eigen::Dynamic, Eigen::Dynamic&gt; WT_; // {-1,0,1}
+  Eigen::VectorXd bT_;
+};</code></pre>
+
+
+<p class="p1"><span class="s1">include/brain/metrics.hpp</span></p>
+
+
+<pre><code>#pragma once
+#include &lt;prometheus/registry.h&gt;
+struct Metrics {
+  std::shared_ptr&lt;prometheus::Registry&gt; reg;
+  prometheus::Family&lt;prometheus::Counter&gt;* steps;
+  prometheus::Family&lt;prometheus::Histogram&gt;* latency;
+  prometheus::Family&lt;prometheus::Gauge&gt;* entropy;
+  static Metrics&amp; instance();
+};</code></pre>
+
+
+<p class="p1"><span class="s1"><h1><span class="s1">6) QW implementation (highlights)</span></h1></span></p>
+<p class="p2"><span class="s2"></span><br></p>
+<p class="p3"><span class="s3">src/stepper.cpp</span></p>
+
+
+<pre><code>#include &quot;brain/qw.hpp&quot;
+#include &lt;Eigen/Eigenvalues&gt;
+using cmat = Eigen::MatrixXcd;
+
+static double von_neumann_entropy(const cmat&amp; rho) {
+  Eigen::SelfAdjointEigenSolver&lt;Eigen::MatrixXcd&gt; es(rho);
+  auto vals = es.eigenvalues().real().array().max(1e-18);
+  return - (vals * vals.log()).sum(); // since rho is PSD and trace=1
+}
+
+void QuantumWorkspace::unitary_step_() {
+  // expm(-i H dt) via scaling and squaring + Pade
+  Eigen::ComplexEigenSolver&lt;cmat&gt; es(H_);
+  cmat V = es.eigenvectors();
+  Eigen::VectorXcd D = (-std::complex&lt;double&gt;(0,1) * es.eigenvalues().array() * cfg_.dt).matrix().array().exp().matrix().asDiagonal();
+  cmat Ustep = V * D * V.inverse();
+  rho_ = Ustep * rho_ * Ustep.adjoint();
+}
+
+void QuantumWorkspace::dissipate_kraus_() {
+  cmat nr = cmat::Zero(rho_.rows(), rho_.cols());
+  for (auto&amp; K : K_) nr.noalias() += K * rho_ * K.adjoint();
+  rho_.swap(nr);
+}
+
+void QuantumWorkspace::psd_trace_project_() {
+  Eigen::SelfAdjointEigenSolver&lt;Eigen::MatrixXcd&gt; es(rho_);
+  auto vals = es.eigenvalues().real();
+  for (int i=0;i&lt;vals.size();++i) if (vals[i] &lt; 0) vals[i] = 0;
+  double sum = vals.sum(); if (sum &lt;= 0) { vals.setConstant(1.0/vals.size()); sum = 1.0; }
+  vals /= sum;
+  Eigen::MatrixXcd D = vals.cast&lt;std::complex&lt;double&gt;&gt;().asDiagonal();
+  rho_ = es.eigenvectors() * D * es.eigenvectors().adjoint();
+}
+
+double QuantumWorkspace::entropy() const { return von_neumann_entropy(rho_); }
+
+Eigen::VectorXd QuantumWorkspace::probs() const {
+  // Pi_i = U |i&gt;&lt;i| U^\dagger
+  int n = cfg_.n;
+  Eigen::VectorXd p(n);
+  for (int i=0;i&lt;n;++i) {
+    Eigen::VectorXcd ei = U_.col(i);
+    std::complex&lt;double&gt; val = (ei.adjoint() * rho_ * ei)(0,0);
+    p[i] = std::max(0.0, val.real());
+  }
+  double s = p.sum(); if (s&lt;=0) { p.setConstant(1.0/n); } else p/=s;
+  return p;
+}</code></pre>
+
+
+<p class="p1"><span class="s1"><h1><span class="s1">7) Server wiring</span></h1></span></p>
+<p class="p2"><span class="s2"></span><br></p>
+<p class="p3"><span class="s3">src/server.cpp</span></p>
+
+
+<pre><code>#include &quot;brain/qw.hpp&quot;
+#include &quot;brain/gw.hpp&quot;
+#include &quot;brain/decoder.hpp&quot;
+#include &quot;brain/metrics.hpp&quot;
+#include &quot;brain.grpc.pb.h&quot;
+#include &lt;grpcpp/grpcpp.h&gt;
+#include &lt;chrono&gt;
+
+using grpc::Server; using grpc::ServerBuilder;
+class BrainSvc final : public hab::Brain::Service {
+public:
+  BrainSvc();
+  grpc::Status Health(grpc::ServerContext*, const hab::HealthReq*, hab::HealthResp*) override;
+  grpc::Status Step(grpc::ServerContext*, const hab::StepReq*, hab::StepResp*) override;
+  grpc::Status GetState(grpc::ServerContext*, const hab::StateReq*, hab::StateResp*) override;
+private:
+  GlobalWorkspace gw_;
+  QuantumWorkspace qw_;
+  Decoder dec_;
+};
+
+int main(int argc, char** argv) {
+  // parse YAML, load certs if mTLS, expose Prometheus at /metrics
+  ServerBuilder b;
+  b.AddListeningPort(&quot;0.0.0.0:50051&quot;, grpc::InsecureServerCredentials()); // replace with mTLS creds
+  BrainSvc svc; b.RegisterService(&amp;svc);
+  std::unique_ptr&lt;Server&gt; server(b.BuildAndStart());
+  server-&gt;Wait();
+}</code></pre>
+
+
+<p class="p1"><span class="s1"><h1><span class="s1">8) Config (configs/quantum.yaml)</span></h1></span></p>
+
+
+<pre><code>dimension: 7
+dt: 0.001
+entropy_eps: 0.03
+max_dwell_ms: 120
+decoherence:
+  type: &quot;dephasing+damping&quot;
+  dephase_init: 1e-8
+  damping_init: 5e-9
+measure:
+  basis: &quot;learned_unitary&quot;   # set U at load
+ports: { grpc: 50051, metrics: 9090 }</code></pre>
+
+
+<p class="p1"><span class="s1"><h1><span class="s1">9) Prometheus endpoint</span></h1></span></p>
+<p class="p2"><span class="s2"></span><br></p>
+<p class="p3"><span class="s2">Expose with prometheus-cpp HTTP exporter:</span></p>
+
+
+<pre><code>// src/metrics.cpp
+#include &quot;brain/metrics.hpp&quot;
+#include &lt;prometheus/exposer.h&gt;
+Metrics&amp; Metrics::instance() {
+  static Metrics m;
+  static prometheus::Exposer exposer{&quot;0.0.0.0:9090&quot;};
+  m.reg = std::make_shared&lt;prometheus::Registry&gt;();
+  exposer.RegisterCollectable(m.reg);
+  m.steps   = &amp;prometheus::BuildCounter().Name(&quot;hab_steps_total&quot;).Register(*m.reg);
+  m.latency = &amp;prometheus::BuildHistogram().Name(&quot;hab_step_latency_ms&quot;)
+                .Register(*m.reg);
+  m.entropy = &amp;prometheus::BuildGauge().Name(&quot;hab_entropy&quot;).Register(*m.reg);
+  return m;
+}</code></pre>
+
+
+<p class="p1"><span class="s1"><h1><span class="s1">10) Audit (Merkle, libsodium)</span></h1></span></p>
+<p class="p1"><span class="s1"><ul><li>
+<p class="p1"><span class="s1">Log JSON events, hash with BLAKE2b, chain </span><span class="s2">prev_hash</span><span class="s1">.</span></p>
+</li><li>
+<p class="p1"><span class="s1">Sign Merkle root with Ed25519 on rotation.</span></p>
+</li></ul></span></p>
+<p class="p2"><span class="s2"></span><br></p>
+<p class="p3"><span class="s3">src/audit.cpp</span><span class="s2"> (sketch)</span></p>
+
+
+<pre><code>// append(entry) -&gt; write, update running hash, flush</code></pre>
+
+
+<p class="p1"><span class="s1"><h1><span class="s1">11) Tests (kernel/tests/qw_tests.cpp)</span></h1></span></p>
+
+
+<pre><code>#include &lt;gtest/gtest.h&gt;
+#include &quot;brain/qw.hpp&quot;
+TEST(QW, Invariants) {
+  QWConfig cfg; QuantumWorkspace qw(cfg);
+  for (int i=0;i&lt;1000;i++) { qw.step(); }
+  auto rho = qw.rho();
+  // trace==1
+  EXPECT_NEAR(rho.trace().real(), 1.0, 1e-10);
+  // PSD
+  Eigen::SelfAdjointEigenSolver&lt;Eigen::MatrixXcd&gt; es(rho);
+  for (int i=0;i&lt;es.eigenvalues().size();++i)
+    EXPECT_GE(es.eigenvalues()[i].real(), -1e-12);
+}</code></pre>
+
+
+<p class="p1"><span class="s1"><h1><span class="s1">12) Docker (docker/Dockerfile)</span></h1></span></p>
+
+
+<pre><code>FROM --platform=$BUILDPLATFORM ubuntu:24.04 as build
+RUN apt-get update &amp;&amp; apt-get install -y build-essential cmake ninja-build git
+# install vcpkg + deps ...
+WORKDIR /app
+COPY kernel/ ./kernel/
+RUN cmake -B build -S kernel -GNinja -DCMAKE_BUILD_TYPE=Release \
+ &amp;&amp; cmake --build build -j
+
+FROM gcr.io/distroless/cc-debian12
+COPY --from=build /app/build/brain_ai_server /usr/local/bin/brain_ai_server
+USER 65532
+ENTRYPOINT [&quot;/usr/local/bin/brain_ai_server&quot;,&quot;--quantum_cfg=/configs/quantum.yaml&quot;]</code></pre>
+
+
+<p class="p1"><span class="s1"><h1><span class="s1">13) Make (convenience)</span></h1></span></p>
+<p class="p2"><span class="s2"></span><br></p>
+<p class="p3"><span class="s3">kernel/Makefile</span></p>
+
+
+<pre><code>all:
+\tcmake -B build -S . -GNinja -DCMAKE_BUILD_TYPE=Release
+\tcmake --build build -j
+test:
+\tctest --test-dir build
+run:
+\t./build/brain_ai_server --quantum_cfg=../configs/quantum.yaml</code></pre>
+
+
+<p class="p1"><span class="s1"><h1><span class="s1">14) Training bridge (optional)</span></h1></span></p>
+<p class="p1"><span class="s1"><ul><li>
+<p class="p1"><span class="s1">Expose C API for QW step/probs for Python training:</span></p>
+</li></ul></span></p>
+
+
+<pre><code>extern &quot;C&quot; {
+  void* hab_qw_new(int n, double dt);
+  void  hab_qw_set_H(void*, const double* g60);
+  void  hab_qw_step(void*);
+  void  hab_qw_probs(void*, double* out7);
+}</code></pre>
+
+
+<p class="p1"><span class="s1"><ul><li>
+<p class="p1"><span class="s1">Bind with pybind11 if needed.</span></p>
+</li></ul></span></p>
+<p class="p2"><span class="s2"></span><br></p>
+<p class="p1"><span class="s1"><h1><span class="s1">15) Runtime plan</span></h1></span></p>
+<p class="p1"><span class="s1"><ol start="1"><li>
+<p class="p1"><span class="s1">Build kernel.</span></p>
+</li><li>
+<p class="p1"><span class="s1">Start gRPC + metrics.</span></p>
+</li><li>
+<p class="p1"><span class="s1">Feed GW vectors from your app (or implement GW+Decoder in C++ too).</span></p>
+</li><li>
+<p class="p1"><span class="s1">On each Step: integrate, maybe collapse, decode, return action.</span></p>
+</li><li>
+<p class="p1"><span class="s1">Log to audit, export metrics.</span></p>
+</li></ol></span></p>
+<p class="p2"><span class="s2"></span><br></p>
+<p class="p1"><span class="s1"><h1><span class="s1">16) Defaults (copy)</span></h1></span></p>
+<p class="p1"><span class="s1"><ul><li>
+<p class="p1"><span class="s1">n=7,\ dt=1e{-3},\ \epsilon=0.03,\ \Delta t_{\max}=120\,\text{ms}</span><span class="s2">.</span></p>
+</li><li>
+<p class="p1"><span class="s1">Top-k </span><span class="s2">=12</span><span class="s1"> of 60.</span></p>
+</li><li>
+<p class="p1"><span class="s1">Decoder ternary last layer.</span></p>
+</li><li>
+<p class="p1"><span class="s1">mTLS for production.</span></p>
+</li></ul></span></p>
+<p class="p2"><span class="s2"></span><br></p>
+<p class="p3"><span class="s2">This is the C++-upgraded, CPTP-safe, portable build with concrete code skeletons and configs.</span></p>
+
+</body>
+</html>

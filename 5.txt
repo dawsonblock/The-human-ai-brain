@@ -1,0 +1,150 @@
+Python
+
+
+#!/usr/bin/env python3
+“””
+FDQC v3.1 - Python Utilities for Analysis and Visualization
+Provides dataset generation, result visualization, and C++/Python comparison
+“””
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from pathlib import Path
+import argparse
+import json
+from typing import Dict, List, Tuple
+
+# Set style
+
+plt.style.use(‘seaborn-v0_8-paper’)
+sns.set_context(“paper”, font_scale=1.2)
+
+# ============================================================================
+
+# Dataset Generation
+
+# ============================================================================
+
+def generate_synthetic_mnist_like(
+n_samples: int = 10000,
+n_features: int = 784,
+n_classes: int = 10,
+output_dir: str = “data”
+) -> None:
+“”“Generate synthetic MNIST-like dataset for validation”””
+
+```
+output_path = Path(output_dir)
+output_path.mkdir(exist_ok=True)
+
+print(f"Generating {n_samples} samples...")
+
+# Generate class-conditional Gaussian blobs
+X = []
+y = []
+
+samples_per_class = n_samples // n_classes
+
+for c in range(n_classes):
+    # Random mean for each class
+    mean = np.random.randn(n_features) * 0.5
+    cov = np.eye(n_features) * 0.1
+    
+    class_samples = np.random.multivariate_normal(
+        mean, cov, size=samples_per_class
+    )
+    
+    X.append(class_samples)
+    y.extend([c] * samples_per_class)
+
+X = np.vstack(X).astype(np.float32)
+y = np.array(y, dtype=np.int32)
+
+# Shuffle
+perm = np.random.permutation(len(y))
+X = X[perm]
+y = y[perm]
+
+# Save as CSV (for C++ loader)
+print("Saving datasets...")
+
+# Training set (80%)
+train_size = int(0.8 * n_samples)
+X_train, y_train = X[:train_size], y[:train_size]
+X_test, y_test = X[train_size:], y[train_size:]
+
+# Save training data
+train_df = pd.DataFrame(X_train)
+train_df['label'] = y_train
+train_df.to_csv(output_path / 'train.csv', index=False)
+
+# Save test data
+test_df = pd.DataFrame(X_test)
+test_df['label'] = y_test
+test_df.to_csv(output_path / 'test.csv', index=False)
+
+# Save metadata
+metadata = {
+    'n_samples': n_samples,
+    'n_features': n_features,
+    'n_classes': n_classes,
+    'train_size': train_size,
+    'test_size': len(y_test)
+}
+
+with open(output_path / 'metadata.json', 'w') as f:
+    json.dump(metadata, f, indent=2)
+
+print(f"Dataset saved to {output_path}/")
+print(f"  Train: {len(y_train)} samples")
+print(f"  Test: {len(y_test)} samples")
+```
+
+# ============================================================================
+
+# Result Visualization
+
+# ============================================================================
+
+def visualize_results(csv_path: str = “fdqc_validation_results.csv”) -> None:
+“”“Generate publication-quality plots from validation results”””
+
+```
+# Load results
+df = pd.read_csv(csv_path)
+
+# Create figure
+fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+
+# Plot 1: Accuracy vs Capacity
+axes[0].plot(df['capacity'], df['accuracy'] * 100, 
+             'o-', linewidth=2, markersize=10, color='#2E86AB')
+axes[0].axvline(4, color='red', linestyle='--', alpha=0.5, 
+                linewidth=2, label='FDQC prediction (n=4)')
+axes[0].set_xlabel('Working Memory Capacity (n)', fontsize=12, weight='bold')
+axes[0].set_ylabel('Accuracy (%)', fontsize=12, weight='bold')
+axes[0].set_title('Task Performance', fontsize=14, weight='bold')
+axes[0].grid(alpha=0.3, linestyle='--')
+axes[0].legend(fontsize=10)
+axes[0].set_ylim([0, 100])
+
+# Plot 2: Energy vs Capacity
+axes[1].plot(df['capacity'], df['energy'], 
+             's-', linewidth=2, markersize=10, color='#A23B72')
+axes[1].set_xlabel('Working Memory Capacity (n)', fontsize=12, weight='bold')
+axes[1].set_ylabel('Energy Cost (∝ n²)', fontsize=12, weight='bold')
+axes[1].set_title('Metabolic Cost', fontsize=14, weight='bold')
+axes[1].grid(alpha=0.3, linestyle='--')
+
+# Add theoretical curve
+n_theory = np.linspace(df['capacity'].min(), df['capacity'].max(), 100)
+E_theory = n_theory ** 2
+axes[1].plot(n_theory, E_theory, ':', color='gray', 
+             linewidth=1.5, alpha=0.7, label='n² (theory)')
+axes[1].legend(fontsize=10)
+
+# Plot 3: Efficiency (Acc/Energy)
+axes[2].plot(df['capacity'], df['efficiency'],
+```

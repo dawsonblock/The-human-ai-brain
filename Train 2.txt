@@ -1,0 +1,435 @@
+"""
+Visualization tools for conscious workspace dynamics
+Real-time monitoring and post-hoc analysis
+"""
+
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.patches import Circle, Rectangle
+import seaborn as sns
+import numpy as np
+import torch
+from typing import List, Dict
+from collections import deque
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+
+class ConsciousWorkspaceVisualizer:
+    """
+    Real-time visualization of conscious workspace dynamics
+    """
+    def __init__(self, config: FDQCConfig, figsize: Tuple[int, int] = (16, 10)):
+        self.config = config
+        self.figsize = figsize
+        
+        # Data buffers
+        self.entropy_history = deque(maxlen=500)
+        self.energy_history = deque(maxlen=500)
+        self.capacity_history = deque(maxlen=500)
+        self.collapse_events = deque(maxlen=500)
+        self.accuracy_history = deque(maxlen=500)
+        
+        # Workspace state buffer (for dimensionality visualization)
+        self.workspace_states = deque(maxlen=100)
+        
+        # Setup figure
+        self.fig = None
+        self.axes = None
+        self._setup_figure()
+    
+    def _setup_figure(self):
+        """Initialize matplotlib figure with subplots"""
+        self.fig = plt.figure(figsize=self.figsize)
+        gs = self.fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
+        
+        # Subplot layout:
+        # [Workspace State]  [Entropy Time Series]  [Energy Time Series]
+        # [PCA Projection ]  [Capacity Selection ]  [Performance      ]
+        # [Collapse Events]  [Statistics        ]  [Phase Space      ]
+        
+        self.axes = {
+            'workspace': self.fig.add_subplot(gs[0, 0]),
+            'entropy': self.fig.add_subplot(gs[0, 1]),
+            'energy': self.fig.add_subplot(gs[0, 2]),
+            'pca': self.fig.add_subplot(gs[1, 0]),
+            'capacity': self.fig.add_subplot(gs[1, 1]),
+            'performance': self.fig.add_subplot(gs[1, 2]),
+            'collapses': self.fig.add_subplot(gs[2, 0]),
+            'stats': self.fig.add_subplot(gs[2, 1]),
+            'phase': self.fig.add_subplot(gs[2, 2])
+        }
+        
+        plt.ion()  # Interactive mode
+    
+    def update(self,
+               workspace_state: torch.Tensor,
+               entropy: float,
+               energy: float,
+               capacity: int,
+               collapsed: bool,
+               accuracy: float):
+        """
+        Update visualization with new data point
+        
+        Args:
+            workspace_state: (n,) current workspace state
+            entropy: Scalar entropy value
+            energy: Energy consumption
+            capacity: Current workspace dimensionality
+            collapsed: Whether collapse occurred this step
+            accuracy: Current task accuracy
+        """
+        # Add to buffers
+        self.entropy_history.append(entropy)
+        self.energy_history.append(energy)
+        self.capacity_history.append(capacity)
+        self.collapse_events.append(1.0 if collapsed else 0.0)
+        self.accuracy_history.append(accuracy)
+        self.workspace_states.append(workspace_state.cpu().detach().numpy())
+        
+        # Update each subplot
+        self._update_workspace_state(workspace_state)
+        self._update_time_series()
+        self._update_capacity_distribution()
+        self._update_performance()
+        self._update_collapse_events()
+        self._update_statistics()
+        self._update_pca_projection()
+        self._update_phase_space()
+        
+        # Refresh display
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+    
+    def _update_workspace_state(self, state: torch.Tensor):
+        """Visualize current workspace state as bar plot"""
+        ax = self.axes['workspace']
+        ax.clear()
+        
+        state_np = state.cpu().detach().numpy()
+        n = len(state_np)
+        
+        # Bar plot
+        colors = plt.cm.viridis(np.abs(state_np) / (np.abs(state_np).max() + 1e-8))
+        ax.bar(range(n), state_np, color=colors)
+        
+        # Threshold line
+        ax.axhline(0, color='red', linestyle='--', alpha=0.5)
+        
+        ax.set_title('Conscious Workspace State', fontweight='bold')
+        ax.set_xlabel('Dimension')
+        ax.set_ylabel('Activation')
+        ax.set_ylim(-1.5, 1.5)
+        ax.grid(True, alpha=0.3)
+    
+    def _update_time_series(self):
+        """Update entropy and energy time series"""
+        # Entropy
+        ax = self.axes['entropy']
+        ax.clear()
+        ax.plot(list(self.entropy_history), color='blue', linewidth=2)
+        ax.axhline(np.log(4), color='red', linestyle='--', label='log(4) threshold')
+        ax.set_title('Entropy Over Time', fontweight='bold')
+        ax.set_ylabel('S (nats)')
+        ax.set_ylim(0, 3)
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        # Energy
+        ax = self.axes['energy']
+        ax.clear()
+        ax.plot(list(self.energy_history), color='orange', linewidth=2)
+        ax.set_title('Energy Consumption', fontweight='bold')
+        ax.set_ylabel('E (J/s)')
+        ax.ticklabel_format(axis='y', style='scientific', scilimits=(0,0))
+        ax.grid(True, alpha=0.3)
+    
+    def _update_capacity_distribution(self):
+        """Show capacity selection distribution"""
+        ax = self.axes['capacity']
+        ax.clear()
+        
+        if len(self.capacity_history) == 0:
+            return
+        
+        capacities = np.array(list(self.capacity_history))
+        unique, counts = np.unique(capacities, return_counts=True)
+        
+        colors = plt.cm.Set3(np.arange(len(unique)))
+        ax.pie(counts, labels=unique, autopct='%1.1f%%', colors=colors, startangle=90)
+        ax.set_title('Capacity Selection Distribution', fontweight='bold')
+    
+    def _update_performance(self):
+        """Plot rolling accuracy"""
+        ax = self.axes['performance']
+        ax.clear()
+        
+        if len(self.accuracy_history) > 0:
+            # Smoothed accuracy
+            window = 20
+            if len(self.accuracy_history) >= window:
+                smoothed = np.convolve(self.accuracy_history, 
+                                      np.ones(window)/window, mode='valid')
+                ax.plot(smoothed, color='green', linewidth=2, label='Smoothed')
+            
+            # Raw accuracy
+            ax.plot(list(self.accuracy_history), color='green', alpha=0.3, label='Raw')
+            ax.axhline(0.8, color='red', linestyle='--', label='Target')
+            
+            ax.set_title('Task Performance', fontweight='bold')
+            ax.set_ylabel('Accuracy')
+            ax.set_ylim(0, 1)
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+    
+    def _update_collapse_events(self):
+        """Show collapse event timeline"""
+        ax = self.axes['collapses']
+        ax.clear()
+        
+        events = np.array(list(self.collapse_events))
+        ax.fill_between(range(len(events)), events, alpha=0.5, color='purple')
+        ax.set_title('Collapse Events', fontweight='bold')
+        ax.set_ylabel('Collapsed')
+        ax.set_ylim(-0.1, 1.1)
+        ax.grid(True, alpha=0.3)
+    
+    def _update_statistics(self):
+        """Display current statistics as text"""
+        ax = self.axes['stats']
+        ax.clear()
+        ax.axis('off')
+        
+        if len(self.entropy_history) == 0:
+            return
+        
+        stats_text = f"""
+        Current Statistics
+        ───────────────────
+        Mean Entropy: {np.mean(self.entropy_history):.3f} nats
+        Mean Energy: {np.mean(self.energy_history):.2e} J/s
+        
+        Most Used Capacity: {int(np.median(self.capacity_history))}
+        Collapse Rate: {np.mean(self.collapse_events):.1%}
+        
+        Current Accuracy: {self.accuracy_history[-1]:.1%}
+        Mean Accuracy: {np.mean(self.accuracy_history):.1%}
+        
+        Steps: {len(self.entropy_history)}
+        """
+        
+        ax.text(0.1, 0.5, stats_text, fontsize=11, verticalalignment='center',
+               family='monospace')
+    
+    def _update_pca_projection(self):
+        """2D PCA projection of workspace states"""
+        ax = self.axes['pca']
+        ax.clear()
+        
+        if len(self.workspace_states) < 10:
+            return
+        
+        from sklearn.decomposition import PCA
+        
+        # Stack states
+        states = np.array(list(self.workspace_states))
+        
+        # PCA
+        pca = PCA(n_components=2)
+        projected = pca.fit_transform(states)
+        
+        # Color by time
+        colors = np.arange(len(projected))
+        scatter = ax.scatter(projected[:, 0], projected[:, 1], 
+                           c=colors, cmap='viridis', alpha=0.6)
+        
+        # Trajectory
+        ax.plot(projected[:, 0], projected[:, 1], 'k-', alpha=0.2, linewidth=0.5)
+        
+        ax.set_title('PCA Projection (2D)', fontweight='bold')
+        ax.set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.1%})')
+        ax.set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.1%})')
+        ax.grid(True, alpha=0.3)
+        
+        plt.colorbar(scatter, ax=ax, label='Time')
+    
+    def _update_phase_space(self):
+        """Phase space: Entropy vs Energy"""
+        ax = self.axes['phase']
+        ax.clear()
+        
+        if len(self.entropy_history) < 2:
+            return
+        
+        entropy = np.array(list(self.entropy_history))
+        energy = np.array(list(self.energy_history))
+        
+        # Scatter plot
+        colors = np.arange(len(entropy))
+        scatter = ax.scatter(entropy, energy, c=colors, cmap='plasma', alpha=0.6, s=10)
+        
+        # Trajectory
+        ax.plot(entropy, energy, 'k-', alpha=0.1, linewidth=0.5)
+        
+        ax.set_title('Phase Space: S vs E', fontweight='bold')
+        ax.set_xlabel('Entropy (nats)')
+        ax.set_ylabel('Energy (J/s)')
+        ax.ticklabel_format(axis='y', style='scientific', scilimits=(0,0))
+        ax.grid(True, alpha=0.3)
+        
+        plt.colorbar(scatter, ax=ax, label='Time')
+    
+    def save_figure(self, path: str):
+        """Save current visualization"""
+        self.fig.savefig(path, dpi=300, bbox_inches='tight')
+        print(f"✓ Saved visualization to: {path}")
+    
+    def close(self):
+        """Close visualization"""
+        plt.close(self.fig)
+
+
+class InteractiveDashboard:
+    """
+    Interactive Plotly dashboard for post-hoc analysis
+    """
+    def __init__(self, log_file: str):
+        self.log_file = log_file
+        self.data = self._load_logs()
+    
+    def _load_logs(self) -> Dict:
+        """Load training logs"""
+        import json
+        with open(self.log_file, 'r') as f:
+            return json.load(f)
+    
+    def create_dashboard(self):
+        """Generate interactive dashboard"""
+        
+        # Create subplots
+        fig = make_subplots(
+            rows=3, cols=2,
+            subplot_titles=(
+                'Entropy Evolution',
+                'Energy Consumption',
+                'Capacity Selection',
+                'Task Accuracy',
+                'Collapse Events',
+                'Reward Signal'
+            ),
+            specs=[[{'type': 'scatter'}, {'type': 'scatter'}],
+                   [{'type': 'bar'}, {'type': 'scatter'}],
+                   [{'type': 'scatter'}, {'type': 'scatter'}]]
+        )
+        
+        # Extract data
+        steps = self.data['steps']
+        entropy = self.data['entropy']
+        energy = self.data['energy']
+        capacity = self.data['capacity']
+        accuracy = self.data['accuracy']
+        collapses = self.data['collapses']
+        rewards = self.data['rewards']
+        
+        # Plot 1: Entropy
+        fig.add_trace(
+            go.Scatter(x=steps, y=entropy, mode='lines', name='Entropy',
+                      line=dict(color='blue', width=2)),
+            row=1, col=1
+        )
+        fig.add_hline(y=np.log(4), line_dash="dash", line_color="red",
+                     annotation_text="log(4) threshold", row=1, col=1)
+        
+        # Plot 2: Energy
+        fig.add_trace(
+            go.Scatter(x=steps, y=energy, mode='lines', name='Energy',
+                      line=dict(color='orange', width=2)),
+            row=1, col=2
+        )
+        
+        # Plot 3: Capacity distribution
+        capacity_counts = np.bincount(capacity)
+        fig.add_trace(
+            go.Bar(x=list(range(len(capacity_counts))), y=capacity_counts,
+                  name='Capacity', marker_color='purple'),
+            row=2, col=1
+        )
+        
+        # Plot 4: Accuracy
+        fig.add_trace(
+            go.Scatter(x=steps, y=accuracy, mode='lines', name='Accuracy',
+                      line=dict(color='green', width=2)),
+            row=2, col=2
+        )
+        
+        # Plot 5: Collapses
+        fig.add_trace(
+            go.Scatter(x=steps, y=collapses, mode='markers', name='Collapse',
+                      marker=dict(color='purple', size=8)),
+            row=3, col=1
+        )
+        
+        # Plot 6: Rewards
+        fig.add_trace(
+            go.Scatter(x=steps, y=rewards, mode='lines', name='Reward',
+                      line=dict(color='darkgreen', width=2)),
+            row=3, col=2
+        )
+        
+        # Update layout
+        fig.update_layout(
+            height=1000,
+            title_text="FDQC-Net Training Dashboard",
+            showlegend=False
+        )
+        
+        # Save
+        fig.write_html("fdqc_dashboard.html")
+        print("✓ Interactive dashboard saved to: fdqc_dashboard.html")
+        
+        return fig
+
+
+def create_collapse_animation(workspace_states: List[np.ndarray],
+                              entropy_values: List[float],
+                              output_path: str = 'collapse_animation.mp4'):
+    """
+    Create animation showing workspace collapse dynamics
+    """
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    
+    def update(frame):
+        ax1.clear()
+        ax2.clear()
+        
+        # Plot 1: Workspace state
+        state = workspace_states[frame]
+        n = len(state)
+        colors = plt.cm.RdBu(state / 2 + 0.5)  # Normalize to [0,1]
+        ax1.bar(range(n), state, color=colors)
+        ax1.set_ylim(-1.5, 1.5)
+        ax1.set_title(f'Workspace State (t={frame})')
+        ax1.set_xlabel('Dimension')
+        ax1.set_ylabel('Activation')
+        ax1.axhline(0, color='black', linestyle='-', linewidth=0.5)
+        ax1.grid(True, alpha=0.3)
+        
+        # Plot 2: Entropy trajectory
+        ax2.plot(entropy_values[:frame+1], 'b-', linewidth=2)
+        ax2.axhline(np.log(4), color='red', linestyle='--', label='Threshold')
+        ax2.scatter([frame], [entropy_values[frame]], color='red', s=100, zorder=5)
+        ax2.set_xlim(0, len(entropy_values))
+        ax2.set_ylim(0, max(entropy_values) * 1.1)
+        ax2.set_title('Entropy Evolution')
+        ax2.set_xlabel('Time Step')
+        ax2.set_ylabel('Entropy (nats)')
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+    
+    anim = animation.FuncAnimation(fig, update, frames=len(workspace_states),
+                                  interval=100, repeat=True)
+    
+    anim.save(output_path, writer='ffmpeg', fps=10, dpi=150)
+    print(f"✓ Animation saved to: {output_path}")
+    plt.close()

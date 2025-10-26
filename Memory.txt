@@ -1,0 +1,250 @@
+Here is the complete, formal mathematical framework for the Memory System of the Human-AI Brain.
+It integrates short-term episodic memory, long-term vector storage, and semantic retrieval into one coherent system that links directly to the Global Workspace (GW) and Quantum Workspace (QW).
+
+⸻
+
+1. Memory Overview
+
+The memory subsystem is hierarchical:
+
+\text{Perceptual Encoders} \;\to\; \text{Global Workspace (GW)} \;\to\;
+\underbrace{\text{Episodic Memory (STM)} \;\to\; \text{Long-Term Memory (LTM)}}_{\text{Memory System}}
+
+Each memory entry stores:
+m_t = (\tilde{g}t, e{y_t}, a_t, r_t, t)
+where:
+	•	\tilde{g}_t: top-k sparse global workspace vector
+	•	e_{y_t}: collapsed symbol (quantum conscious state)
+	•	a_t: output action or thought
+	•	r_t: reward or salience (optional)
+	•	t: timestamp
+
+⸻
+
+2. Episodic (Short-Term) Memory (STM)
+
+A sliding buffer that captures recent context and integrates temporal correlation.
+
+⸻
+
+2.1 Representation
+
+Let the STM buffer hold N most recent entries:
+\mathcal{M}{\text{STM}} = \{ m{t-N+1}, \ldots, m_t \}
+
+Each stored vector is a concatenation:
+v_t = [\tilde{g}t; e{y_t}; a_t; r_t] \in \mathbb{R}^{d_g + n + d_a + 1}
+
+⸻
+
+2.2 Temporal Encoding
+
+A positional decay weight models recency:
+
+w_i = \exp\!\left(-\frac{t - t_i}{\tau_\text{decay}}\right)
+
+Effective weighted memory state:
+v_{\text{STM}} = \frac{\sum_i w_i v_i}{\sum_i w_i}
+
+⸻
+
+2.3 Episodic Aggregation
+
+For small chunk consolidation (size C):
+
+\bar{v}{j} = \frac{1}{C} \sum{i = (j-1)C+1}^{jC} v_i
+
+Chunked episodic trace:
+\mathcal{E}_t = \{ \bar{v}_1, \bar{v}2, \ldots, \bar{v}{N/C} \}
+
+⸻
+
+3. Long-Term Memory (LTM)
+
+Stored as a vector database (e.g., FAISS), allowing approximate nearest-neighbor (ANN) retrieval.
+
+⸻
+
+3.1 Storage Representation
+
+Each episodic vector \bar{v}_j is embedded into a fixed latent space \mathbb{R}^d:
+
+u_j = f_{\text{mem}}(\bar{v}_j) = W_m \bar{v}_j + b_m, \quad u_j \in \mathbb{R}^{d}
+
+Normalize for cosine similarity:
+
+\tilde{u}_j = \frac{u_j}{\|u_j\|_2}
+
+Memory index:
+\mathcal{M}_{\text{LTM}} = \{ (\tilde{u}_j, \text{id}_j) \}
+
+⸻
+
+3.2 Write Rule (Hebbian-style)
+
+For each new memory vector u_t:
+
+\mathcal{M}{\text{LTM}} \leftarrow \mathcal{M}{\text{LTM}} \cup \{(\tilde{u}_t, \text{id}_t)\}
+
+If capacity exceeded, prune via age or low salience:
+\text{delete } \arg\min_i \, s_i \exp(-\lambda_{\text{forget}}(t - t_i))
+where s_i is salience.
+
+⸻
+
+4. Memory Retrieval
+
+Given a current query vector (e.g., current brain state) q_t = [\tilde{g}t; e{y_t}],
+retrieve semantically similar memories.
+
+⸻
+
+4.1 Query Embedding
+
+u_q = f_{\text{mem}}(q_t) = W_m q_t + b_m
+\tilde{u}_q = \frac{u_q}{\|u_q\|_2}
+
+⸻
+
+4.2 Similarity and Attention Weights
+
+Cosine similarity:
+s_i = \tilde{u}_q^\top \tilde{u}_i
+
+Softmax attention over top-K retrieved memories:
+\alpha_i = \frac{\exp(\beta s_i)}{\sum_{j\in \text{TopK}} \exp(\beta s_j)}, \quad \beta = \text{inverse temperature}
+
+Weighted recall vector:
+r_t = \sum_{i\in \text{TopK}} \alpha_i \bar{v}_i
+
+⸻
+
+5. Consolidation Loop (STM → LTM)
+
+Periodic transfer of episodic traces to long-term storage.
+	1.	Compute chunk mean:
+\bar{v}_j = \frac{1}{C}\sum v_i
+	2.	Compute embedding u_j = f_{\text{mem}}(\bar{v}_j)
+	3.	Normalize \tilde{u}_j = u_j / \|u_j\|_2
+	4.	Insert into LTM index
+
+After insertion, purge expired STM entries:
+\mathcal{M}{\text{STM}} \leftarrow \mathcal{M}{\text{STM}}[N_\text{keep}:]
+
+⸻
+
+6. Context Reinjection into GW
+
+Retrieved context r_t influences next cognitive cycle.
+
+g_{t+1} = \mathrm{LN}\!\left(W_g [g_t; r_t] + b_g\right)
+
+This creates recursive cognition — the ability to modify the workspace
+based on recalled experience.
+
+⸻
+
+7. Salience and Reward Learning
+
+Assign salience s_t to each memory entry based on reward or error signal.
+
+s_t = \eta_r |r_t| + \eta_e \|\nabla \mathcal{L}_\text{task}\|_2
+
+Used to prioritize what gets consolidated.
+
+⸻
+
+8. Mathematical Summary Table
+
+Symbol	Description	Equation / Meaning
+m_t	memory tuple	(\tilde g_t, e_{y_t}, a_t, r_t, t)
+v_t	flattened vector	[\tilde g_t; e_{y_t}; a_t; r_t]
+w_i	temporal decay	e^{-(t - t_i)/\tau_\text{decay}}
+v_{\text{STM}}	weighted STM state	\frac{\sum w_i v_i}{\sum w_i}
+\bar v_j	chunked episodic vector	mean of C recent v_i
+u_j	LTM embedding	W_m \bar v_j + b_m
+\tilde u_j	normalized embedding	u_j / |u_j|_2
+s_i	similarity score	\tilde u_q^\top \tilde u_i
+\alpha_i	retrieval attention	\frac{e^{\beta s_i}}{\sum e^{\beta s_j}}
+r_t	recalled vector	\sum \alpha_i \bar v_i
+s_t	salience score	$begin:math:text$\eta_r
+
+
+⸻
+
+9. Memory Energy and Constraints
+
+Total memory energy (cognitive load metric):
+
+E_{\text{mem}} = \|\mathcal{M}_{\text{STM}}\|1 + \lambda_L \|\mathcal{M}{\text{LTM}}\|_0
+
+where:
+	•	\|\mathcal{M}_{\text{STM}}\|_1 = number of active entries (recent working set)
+	•	\|\mathcal{M}_{\text{LTM}}\|_0 = total items in index
+	•	\lambda_L controls forgetting pressure
+
+Minimizing E_{\text{mem}} enforces compact representations.
+
+⸻
+
+10. Forgetting Dynamics (Exponential Decay)
+
+Memory strength decays over time:
+
+s_i(t) = s_i(0) e^{-\lambda_f (t - t_i)}
+
+If s_i(t) < s_\text{min}, the item is purged:
+\text{delete } i \text{ if } s_i(t) < s_\text{min}
+
+⸻
+
+11. Memory–Consciousness Coupling
+
+The Quantum Workspace modulates recall probability through entropy gating:
+
+P_\text{recall} = \sigma(\gamma (S_\text{cap} - S(\rho_t)))
+
+When entropy (uncertainty) rises, recall likelihood increases, mimicking spontaneous memory retrieval under cognitive “confusion.”
+
+⸻
+
+12. Combined Update Equation (per cycle)
+
+\boxed{
+\begin{aligned}
+\tilde g_t &= \text{TopK}\big(\mathrm{GW}(x_t)\big) \\
+\rho_{t+1} &= \mathcal{L}{H,L}(\rho_t, \tilde g_t) \\
+e{y_t} &= \text{Collapse}(\rho_{t+1}) \\
+r_t &= \text{Retrieve}(q_t = [\tilde g_t; e_{y_t}]) \\
+g_{t+1} &= \mathrm{LN}(W_g [\tilde g_t; r_t] + b_g)
+\end{aligned}
+}
+
+This recursion creates a memory-augmented conscious loop, where experience continuously refines perception.
+
+⸻
+
+13. Example Parameter Defaults
+
+\begin{aligned}
+N &= 100 \quad (\text{STM buffer size}) \\
+C &= 4 \quad (\text{chunk size}) \\
+\tau_\text{decay} &= 3.0\ \text{s} \\
+\beta &= 10.0\quad (\text{retrieval sharpness}) \\
+\lambda_\text{forget} &= 0.001 \\
+d &= 128\quad (\text{LTM embedding dim})
+\end{aligned}
+
+⸻
+
+14. Summary Interpretation
+	•	STM: weighted short-term vector memory (working buffer)
+	•	LTM: FAISS-style high-dimensional memory index
+	•	Retrieval: cosine-similarity attention mechanism
+	•	Consolidation: average → embed → normalize → store
+	•	Coupling: low entropy in QW → no recall; high entropy → recall triggered
+	•	Energy control: exponential decay and sparsity regularization
+
+⸻
+
+This completes the full mathematical specification of memory in the Human AI Brain — including STM, LTM, attention-based retrieval, consolidation, forgetting, and quantum-consciousness coupling.

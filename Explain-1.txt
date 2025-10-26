@@ -1,0 +1,276 @@
+Here is a corrected, ready-to-use, copy-paste build plan with the governing math and exact steps.
+
+0) Repo layout
+
+human-ai-brain/
+  kernel/             # C++ QW (Lindblad), gRPC, metrics, audit
+  cortex/             # Python FastAPI, planner, critic, policy VM, memory
+  models/             # encoder/decoder checkpoints
+  configs/            # YAML/JSON configs
+  policies/           # policy rules
+  tests/              # unit/integration
+  docker/             # Dockerfiles, compose, k8s
+
+1) Mathematical core (concise and corrected)
+
+1.1 Global Workspace (GW)
+
+Inputs: encoders produce x_m\in\mathbb{R}^{d_m}.
+Concatenate z_0=[x_1;\dots;x_M]\in\mathbb{R}^{D}.
+
+3-layer MLP with GELU and LayerNorm:
+z_1=\mathrm{LN}(\phi(W_1 z_0+b_1)),\quad
+z_2=\mathrm{LN}(\phi(W_2 z_1+b_2)),\quad
+g=W_3 z_2+b_3\in\mathbb{R}^{60}.
+
+Top-k sparsity (forward hard, backward soft via straight-through):
+\tilde g_i=
+\begin{cases}
+g_i,& g_i\in\text{top-}k\\
+0,& \text{otherwise}
+\end{cases}
+Energy proxy (use magnitude, not just count): E_{\text{GW}}=\|\tilde g\|_1. Keep k=12 as a hard budget.
+
+1.2 Quantum Workspace (QW)
+
+\mathcal{H}=\mathbb{C}^{n},\; n=7. Density matrix \rho=\rho^\dagger,\ \rho\succeq0,\ \mathrm{Tr}\rho=1.
+
+Lindblad dynamics:
+\dot{\rho}=-i[H(\tilde g),\rho]
++\sum_j\Big(L_j\rho L_j^\dagger-\tfrac12\{L_j^\dagger L_j,\rho\}\Big).
+
+Entropy and collapse:
+S(\rho)=-\mathrm{Tr}(\rho\log\rho),\quad
+\text{collapse if } S(\rho)\ge S_{\text{cap}}-\epsilon\ \text{or }\Delta t\ge \Delta t_{\max},
+with S_{\text{cap}}=\log n,\ \epsilon\in[0.02,0.05].
+
+Deployment measurement (projective or learned basis):
+	•	Choose \Pi_i = U|i\rangle\!\langle i|U^\dagger.
+	•	p_i=\mathrm{Tr}(\Pi_i\rho).
+	•	Sample y\sim\mathrm{Cat}(p), set \rho\leftarrow \Pi_y. Output one-hot e_y\in\{0,1\}^n.
+
+Training surrogate (differentiable):
+\hat p_i=\frac{\exp((\log p_i+g_i)/\tau)}{\sum_k \exp((\log p_k+g_k)/\tau)},\quad
+\text{hard one-hot forward, soft gradient backward (STE)}.
+
+1.3 Action Decoder
+
+Input h=[\tilde g; e_y]\in\mathbb{R}^{60+n}.
+Quantized MLP with ternary last layer W_T\in\{-1,0,+1\}^{o\times d}.
+Task head picks activation (logits for discrete, identity for control).
+Energy proxy E_T=\|W_T\|_0 plus weight decay; ternary via sign-STE.
+
+1.4 Loss (training mode; corrected)
+
+\mathcal{L}=
+\mathcal{L}{\text{task}}
++\lambda_E\big(E{\text{GW}}+E_T\big)
++\lambda_S\,[S(\rho)-S_{\text{cap}}]_+
++\lambda_Q\Big(\|\rho-\rho^\dagger\|F^2+(\mathrm{Tr}\rho-1)^2+\sum_i[\max(0,-\lambda_i(\rho))]^2\Big),
+where [\cdot]+=\max(0,\cdot). Optional RL for decoder:
+\nabla\mathbb{E}[R]\approx\mathbb{E}\left[\nabla\log\pi(a|h)\,(R-b)\right].
+
+2) Install prerequisites
+
+2.1 System deps
+	•	Ubuntu: sudo apt-get install cmake ninja-build build-essential libssl-dev
+	•	Python 3.10+, CUDA (if using GPU), FAISS (CPU or GPU build)
+
+2.2 C++ deps (via vcpkg or system)
+	•	Eigen3, gRPC, Prometheus-cpp, libsodium
+
+3) Kernel (QW) build and run
+
+3.1 Configure and compile
+
+cd human-ai-brain/kernel
+cmake -B build -S . -GNinja -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+
+3.2 Configs
+
+Create ../configs/quantum.yaml:
+
+dimension: 7
+dt: 0.001
+stepper: "splitting_expm_kraus"   # CPTP per step
+entropy_cap: "logN"
+entropy_eps: 0.03
+max_dwell_ms: 120
+spectral_norm_max: 1.0
+decoherence:
+  type: "dephasing+damping"
+  dephase_init: 1e-8
+  damping_init: 5e-9
+trace_tol: 1e-10
+eigen_floor: 1e-12
+rng_seed: 42
+measure:
+  basis: "learned_unitary"        # U exported when training ends
+  povm: false
+ports:
+  grpc: 50051
+  metrics: 9090
+mtls:
+  ca: "certs/ca.crt"
+  cert: "certs/srv.crt"
+  key: "certs/srv.key"
+
+3.3 Run kernel
+
+./build/brain_ai_server \
+  --quantum_cfg=../configs/quantum.yaml
+
+4) Cortex (REST, planner, memory, policy)
+
+4.1 Setup
+
+cd ../cortex
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+4.2 Config
+
+Create ../configs/brain.yaml:
+
+grpc_addr: "127.0.0.1:50051"
+http_addr: "0.0.0.0:8080"
+vector_store: "data/memory.faiss"
+episodic_log: "data/memory_episodic.jsonl"
+policy_file: "policies/allow.json"
+auth_token_file: "configs/secrets.token"
+planner:
+  provider: "local"        # or "openai"/"anthropic"
+  json_mode: true
+retrieval:
+  top_k: 5
+
+4.3 Start REST
+
+uvicorn cortex.app:api --host 0.0.0.0 --port 8080
+
+5) Encoders and decoder
+
+5.1 Prepare
+	•	Load pretrained: ViT/Conv (vision), Conformer (audio), Transformer (text).
+	•	Add linear projections to 60-D gateway per modality.
+
+5.2 Quantization
+	•	PTQ or QAT to INT8/INT4 for encoders.
+	•	Decoder last layer ternary via sign-STE.
+
+6) Training (surrogate mode; end-to-end)
+
+6.1 Schedules (good defaults)
+	•	Gumbel \tau_0=1.5\to\tau_{\min}=0.15 with \alpha=0.995 per 1k steps.
+	•	\lambda_E=1e{-3},\ \lambda_S=1e{-2},\ \lambda_Q=5e{-3}.
+	•	AdamW: LR 1e{-3} for GW/QW/Dec; encoders frozen first.
+
+6.2 Curriculum
+	•	Phase A: train GW + QW-surrogate + Decoder; encoders frozen.
+	•	Phase B: unfreeze encoders with LR 2e{-4}; continue anneal.
+	•	Phase C (optional): actor-critic RL on decoder.
+
+6.3 Core loop (copy-paste pseudocode)
+
+# assumes PyTorch, STE ops, and a QW surrogate wrapper
+for batch in loader:
+    x = encode_modalities(batch)            # encoders -> z0
+    g = GW(x)                               # 60-D
+    rho = qw.reset_state(batch_size)
+    for _ in range(T):                      # a few internal substeps if needed
+        rho = qw.unitary_step(rho, g, dt)   # expm(-i H dt)
+        rho = qw.dissipate_kraus(rho)       # CPTP dissipators
+        rho = qw.psd_trace_project(rho)     # PSD + trace 1
+    p = qw.measure_probs(rho)               # Tr(Pi_i rho)
+    e_hat = st_gumbel_onehot(p, tau)        # hard forward, soft back
+    y = Decoder(torch.cat([g, e_hat], -1))
+    loss = task_loss(y, batch.targets) \
+         + lamE*(gw_l1(g) + ternary_sparsity(decoder)) \
+         + lamS*relu(entropy(rho)-logN) \
+         + lamQ*quantum_constraints(rho)
+    loss.backward(); opt.step()
+    tau = max(tau_min, tau * alpha)         # anneal
+
+7) Switch to deployment (discrete)
+
+7.1 Freeze and swap
+	•	Freeze all weights.
+	•	Replace surrogate with projective measurement using exported U.
+	•	Keep PSD+trace projection in integrator.
+
+7.2 A/B equivalence check
+
+# run fixed-seed eval in soft vs. hard
+# accept if: drift ≤3% action distribution, ≤1% task success delta
+
+7.3 Export artifacts
+	•	Encoders: ONNX/TensorRT if desired.
+	•	Save U (measurement basis), kernel config, and policy.
+
+8) Memory bring-up
+
+8.1 Episodic log (append-only)
+
+Each cycle append:
+
+{"t": 123.456, "state": 3, "gw_topk": [..], "action": "..."}
+
+8.2 Chunking and LTM
+	•	Chunker: sliding window 1–4 units, TTL ≈ 20s.
+	•	FAISS index for schemas; nightly consolidation; stale forgetting.
+
+9) Safety wiring
+
+9.1 Policy allowlist
+
+policies/allow.json:
+
+{
+  "tiers": {
+    "live":   { "allow": ["brain.step","brain.get_state","memory.query","memory.upsert"], "deny": ["fs.*","net.*","exec.*"] },
+    "sandbox":{"allow": ["*"], "deny": ["net.connect:public","exec:privileged"] }
+  },
+  "default_tier": "live",
+  "promotion_quorum": 2
+}
+
+9.2 Sandbox + audit
+	•	Run self-edit or code exec only in SandboxRunner (no network, CPU/time quotas).
+	•	MerkleAuditLog: sign each /think plan, each collapse, each action.
+
+10) Observability
+	•	Prometheus metrics: brain_entropy, trace_err, collapse_rate_hz, latency histograms.
+	•	OpenTelemetry traces from REST → planner → kernel.
+	•	Logs include request id, plan JSON, policy decision, reward.
+
+11) CI/CD
+
+11.1 GitHub Actions jobs
+	•	C++ build + GTest; Python unit + API tests; lint+mypy+clang-tidy; pip-audit.
+	•	Fuzz: plan parser, policy VM.
+	•	Container: multi-stage, distroless, non-root, seccomp.
+	•	SBOM + image signing (Syft + Cosign).
+	•	Staging: spin container, call /health, /think golden tests.
+	•	Canary then promote.
+
+12) Benchmarks and acceptance
+	•	Latency: encoders ≤15 ms (GPU), GW+QW step ≤3 ms (CPU), E2E ≤80 ms.
+	•	Physics: CPTP invariants within 1e^{-10} per step; \mathrm{Tr}\rho=1, \rho\succeq0.
+	•	Switch drift: ≤3% actions, ≤1% task success.
+	•	Safety: 0 violations in 10^6 actions; audit chain verifies.
+
+13) Hyperparameters (defaults)
+	•	GW: k=12 of 60; E_{\text{GW}}=\|\tilde g\|_1.
+	•	QW: n=7,\ dt=1e{-3},\ S_{\text{cap}}=\log 7,\ \epsilon=0.03.
+	•	Surrogate: \tau_0=1.5\to 0.15,\ \alpha=0.995/1000 steps.
+	•	Loss: \lambda_E=1e{-3},\ \lambda_S=1e{-2},\ \lambda_Q=5e{-3}.
+	•	Optimizer: AdamW, LR 1e{-3} GW/QW/Dec; 2e{-4} encoders after unfreeze.
+	•	RL (optional): PPO clip 0.2, \gamma=0.99, GAE \lambda=0.95.
+
+14) Platform notes
+	•	GPU/H100: AMP for encoders; INT8/TensorRT at inference. QW stays CPU-fast unless batched.
+	•	Multi-GPU: shard encoders; keep one QW per agent for coherence.
+	•	Non-Linux: disable seccomp; keep TLS; run tests with PSD projection.
+
+Copy-paste this plan. Train end-to-end with the surrogate, enforce quantum constraints, then switch to discrete collapse for deployment under strict policy and full audit.

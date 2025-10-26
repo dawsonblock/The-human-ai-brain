@@ -263,7 +263,7 @@ double MetaMonitor::evaluate_self_awareness() const {
     
     // Self-awareness components:
     // 1. Observation consistency (tracking over time)
-    double observation_score = std::min(1.0, observations_.size() / 20.0);
+    double observation_score = std::min(1.0, static_cast<double>(observations_.size()) / 20.0);
     
     // 2. Phenomenal differentiation (simplified: use entropy variance)
     double differentiation_score = 0.5;  // Default moderate differentiation

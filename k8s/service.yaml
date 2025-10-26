@@ -19,10 +19,7 @@ spec:
   selector:
     app: brain-fdqc
     component: server
-  sessionAffinity: ClientIP
-  sessionAffinityConfig:
-    clientIP:
-      timeoutSeconds: 10800
+  sessionAffinity: None
 ---
 apiVersion: v1
 kind: Service

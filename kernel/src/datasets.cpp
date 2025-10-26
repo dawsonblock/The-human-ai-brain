@@ -219,7 +219,7 @@ std::vector<TrainingSample> ReplayBuffer::sample_batch(size_t batch_size) {
 // Data augmentation
 namespace augmentation {
     Eigen::VectorXd add_noise(const Eigen::VectorXd& input, Scalar std_dev) {
-        std::mt19937 rng(std::random_device{}());
+        static thread_local std::mt19937 rng(std::random_device{}());
         std::normal_distribution<Scalar> dist(0.0, std_dev);
         
         Eigen::VectorXd noisy = input;

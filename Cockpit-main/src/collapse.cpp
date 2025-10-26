@@ -55,33 +55,36 @@ std::vector<double> CollapseLoop::softmax(const std::vector<double>& logits,
     if (logits.empty()) {
         return {};
     }
-    
-    // Guard against zero/negative temperature
-    double temp = std::max(temperature, fdqc_params::MIN_TEMPERATURE); // define MIN_TEMPERATURE > 0 in params
-    
+
+    // Ensure strictly positive temperature to avoid division by zero
+    constexpr double kMinTemperature = 1e-6;
+    const double temp = std::max(temperature, kMinTemperature);
+
     // Compute max for numerical stability
-    double max_logit = *std::max_element(logits.begin(), logits.end());
-    
+    const double max_logit = *std::max_element(logits.begin(), logits.end());
+
     // Compute exp((logit - max) / temp)
     std::vector<double> exp_values(logits.size());
     double sum = 0.0;
-    
+
     for (size_t i = 0; i < logits.size(); ++i) {
-        exp_values[i] = std::exp((logits[i] - max_logit) / temp);
+        const double z = (logits[i] - max_logit) / temp;
+        // Clamp z to a safe range to avoid overflow in exp
+        const double z_clamped = std::clamp(z, -700.0, 700.0);
+        exp_values[i] = std::exp(z_clamped);
         sum += exp_values[i];
     }
-    
+
     // Normalize
     if (sum > fdqc_params::EPSILON) {
         for (double& val : exp_values) {
             val /= sum;
         }
     } else {
-        // Uniform distribution if sum is too small
-        double uniform_val = 1.0 / logits.size();
+        const double uniform_val = 1.0 / static_cast<double>(logits.size());
         std::fill(exp_values.begin(), exp_values.end(), uniform_val);
     }
-    
+
     return exp_values;
 }
 

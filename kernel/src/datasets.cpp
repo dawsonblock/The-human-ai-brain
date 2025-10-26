@@ -131,30 +131,35 @@ void SyntheticDataset::generate_spiral(size_t n, int dim) {
         sample.reward = 0.0;
         
         samples_.push_back(sample);
-    }
-}
-
-void SyntheticDataset::generate_gaussian_mixture(size_t n, int dim, int classes) {
-    std::uniform_int_distribution<int> class_dist(0, classes - 1);
-    
-    for (size_t i = 0; i < n; ++i) {
-        TrainingSample sample;
-        sample.input = Eigen::VectorXd::Zero(dim);
-        
-        int label = class_dist(rng_);
-        
-        // Each class has a different mean
-        Eigen::VectorXd mean = Eigen::VectorXd::Zero(dim);
-        Scalar angle = 2.0 * M_PI * label / classes;
-        mean(0) = 2.0 * std::cos(angle);
-        if (dim > 1) mean(1) = 2.0 * std::sin(angle);
-        
-        // Sample from Gaussian
-        std::normal_distribution<Scalar> dist(0.0, 0.5);
-        for (int j = 0; j < dim; ++j) {
-            sample.input(j) = mean(j) + dist(rng_);
+    void SyntheticDataset::generate_gaussian_mixture(size_t n, int dim, int classes) {
+        if (classes <= 0) {
+            // Fallback to a single cluster to avoid invalid distributions
+            classes = 1;
         }
+        std::uniform_int_distribution<int> class_dist(0, classes - 1);
+    
+        for (size_t i = 0; i < n; ++i) {
+            TrainingSample sample;
+            sample.input = Eigen::VectorXd::Zero(dim);
         
+            const int label = class_dist(rng_);
+        
+            // Each class has a different mean
+            Eigen::VectorXd mean = Eigen::VectorXd::Zero(dim);
+            const Scalar angle = static_cast<Scalar>(2.0) * static_cast<Scalar>(std::acos(-1.0)) * static_cast<Scalar>(label) / static_cast<Scalar>(classes);
+            mean(0) = static_cast<Scalar>(2.0) * std::cos(angle);
+            if (dim > 1) mean(1) = static_cast<Scalar>(2.0) * std::sin(angle);
+        
+            // Sample from Gaussian
+            std::normal_distribution<Scalar> dist(0.0, 0.5);
+            for (int j = 0; j < dim; ++j) {
+                sample.input(j) = mean(j) + dist(rng_);
+            }
+        
+            sample.label = std::to_string(label);
+            sample.target = Eigen::VectorXd::Zero(classes);
+            // label is guaranteed in [0, classes-1]
+            sample.target(label) = 1.0;
         sample.label = std::to_string(label);
         sample.target = Eigen::VectorXd::Zero(classes);
         sample.target(label) = 1.0;

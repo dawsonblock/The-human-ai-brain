@@ -182,10 +182,10 @@ void BrainTrainer::train_batch(const TrainingBatch& batch) {
     }
     
     // Average metrics
-    metrics_.loss = batch_loss / batch.samples.size();
-    metrics_.accuracy = batch_accuracy / batch.samples.size();
-    metrics_.avg_entropy = batch_entropy / batch.samples.size();
-    metrics_.collapse_rate = (collapse_count / static_cast<Scalar>(batch.samples.size())) * 8.2;  // Approximate Hz
+    metrics_.loss = batch_loss / static_cast<Scalar>(batch.samples.size());
+    metrics_.accuracy = batch_accuracy / static_cast<Scalar>(batch.samples.size());
+    metrics_.avg_entropy = batch_entropy / static_cast<Scalar>(batch.samples.size());
+    metrics_.collapse_rate = (static_cast<Scalar>(collapse_count) / static_cast<Scalar>(batch.samples.size())) * 8.2;  // Approximate Hz
 }
 
 Scalar BrainTrainer::compute_loss(const TrainingSample& sample, const CognitiveResult& result) {

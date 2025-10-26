@@ -97,6 +97,11 @@ if(BUILD_GRPC_SERVER)
     install(TARGETS brain_server DESTINATION bin)
 endif()
 
+# Interactive Demo
+add_executable(interactive_demo demos/interactive_demo.cpp)
+target_link_libraries(interactive_demo PRIVATE brain_core)
+install(TARGETS interactive_demo DESTINATION bin)
+
 # Testing
 if(BUILD_TESTS)
     enable_testing()

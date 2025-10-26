@@ -280,8 +280,11 @@ void BrainTrainer::update_parameters(const std::vector<Eigen::VectorXd>& gradien
     }
 }
 
+// In class initialization (e.g., constructor) ensure initial_learning_rate_ is set:
+// BrainTrainer::BrainTrainer(BrainSystem& brain, const TrainerConfig& config)
+//   : brain_(brain), config_(config), initial_learning_rate_(config.learning_rate) { ... }
+
 void BrainTrainer::apply_learning_rate_schedule(size_t epoch) {
-    // Learning rate schedule logic (would modify config_.learning_rate)
     switch (config_.lr_schedule) {
         case TrainerConfig::LRSchedule::STEP:
             if ((epoch + 1) % config_.lr_step_size == 0) {
@@ -289,13 +292,15 @@ void BrainTrainer::apply_learning_rate_schedule(size_t epoch) {
             }
             break;
         case TrainerConfig::LRSchedule::EXPONENTIAL:
-            config_.learning_rate *= config_.lr_decay;
+            config_.learning_rate = initial_learning_rate_ * std::pow(config_.lr_decay, static_cast<Scalar>(epoch + 1));
             break;
-        case TrainerConfig::LRSchedule::COSINE:
-            config_.learning_rate = config_.learning_rate * 0.5 * 
-                (1.0 + std::cos(M_PI * epoch / config_.num_epochs));
+        case TrainerConfig::LRSchedule::COSINE: {
+            const Scalar t = static_cast<Scalar>(epoch + 1) / static_cast<Scalar>(std::max<size_t>(1, config_.num_epochs));
+            config_.learning_rate = initial_learning_rate_ * static_cast<Scalar>(0.5) * (1.0 + std::cos(M_PI * t));
             break;
+        }
         default:
+            // CONSTANT: leave learning_rate unchanged
             break;
     }
 }

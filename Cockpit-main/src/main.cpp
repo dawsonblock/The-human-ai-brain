@@ -350,21 +350,29 @@ HttpResponse route_request(const HttpRequest& req) {
         resp.status_code = 404;
         resp.status_message = "Not Found";
         resp.body = json({{"error","not found"}}).dump();
-        return resp;
-    }
-}
+        while (true) {
+            n = ::read(client_socket, buffer, sizeof(buffer));
+            if (n > 0) {
+                raw_request.append(buffer, static_cast<size_t>(n));
+                header_end_pos = raw_request.find("\r\n\r\n");
+                if (header_end_pos != std::string::npos) {
+                    break;
+                }
+                if (raw_request.size() > 16384) {
+                    throw std::runtime_error("Headers too large");
+                }
+            } else if (n == 0) {
+                // Client closed connection before sending full headers
+                throw std::runtime_error("Client closed connection");
+            } else {
+                if (errno == EINTR) continue;
+                throw std::runtime_error("Read error while receiving headers");
+            }
+        }
 
-// New: properly defined client handler
-static void handle_client(int client_socket) {
-    try {
-        // Read request headers first
-        std::string raw_request;
-        char buffer[8192];
-        ssize_t n;
-        size_t header_end_pos = std::string::npos;
-
-        while ((n = ::read(client_socket, buffer, sizeof(buffer))) > 0) {
-            raw_request.append(buffer, n);
+        if (header_end_pos == std::string::npos) {
+            throw std::runtime_error("Could not find end of headers");
+        }
             header_end_pos = raw_request.find("\r\n\r\n");
             if (header_end_pos != std::string::npos) {
                 break;

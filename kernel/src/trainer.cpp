@@ -315,7 +315,6 @@ void BrainTrainer::apply_learning_rate_schedule(size_t epoch) {
             }
             break;
         case TrainerConfig::LRSchedule::EXPONENTIAL: {
-            // initial_learning_rate_ must be set from config at construction
             Scalar lr = initial_learning_rate_ * std::pow(safe_decay, static_cast<Scalar>(epoch + 1));
             config_.learning_rate = lr;
             break;
@@ -323,7 +322,8 @@ void BrainTrainer::apply_learning_rate_schedule(size_t epoch) {
         case TrainerConfig::LRSchedule::COSINE: {
             const Scalar denom = static_cast<Scalar>(std::max<size_t>(1, config_.num_epochs));
             const Scalar t = static_cast<Scalar>(epoch + 1) / denom;
-            Scalar lr = initial_learning_rate_ * static_cast<Scalar>(0.5) * (1.0 + std::cos(M_PI * t));
+            const Scalar pi = static_cast<Scalar>(M_PI);
+            Scalar lr = initial_learning_rate_ * static_cast<Scalar>(0.5) * (1.0 + std::cos(pi * t));
             config_.learning_rate = lr;
             break;
         }
@@ -337,7 +337,7 @@ void BrainTrainer::apply_learning_rate_schedule(size_t epoch) {
     } else {
         config_.learning_rate = std::max(min_lr, std::min(max_lr, config_.learning_rate));
     }
-            }
+}
     
             // Write epoch
             file.write(reinterpret_cast<const char*>(&epoch), sizeof(epoch));

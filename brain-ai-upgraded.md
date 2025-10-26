@@ -197,22 +197,28 @@ public:
         }
     }
     
+    // In Tensor class declaration, add member variables for quantization:
+    // float q_scale_ = 1.0f;
+    // float q_zero_point_ = 0.0f;
+
     void quantize_int8() {
         if (precision_ != Precision::FP32) {
             throw std::runtime_error("Can only quantize from FP32");
         }
-        
+    
         if (data_fp32_.empty()) return;
-        
+    
         float min_val = *std::min_element(data_fp32_.begin(), data_fp32_.end());
         float max_val = *std::max_element(data_fp32_.begin(), data_fp32_.end());
-        float scale = (max_val - min_val) / 255.0f;
-        
-        if (scale < 1e-10f) scale = 1.0f;  // Avoid division by zero
-        
+    
+        q_scale_ = (max_val - min_val) / 255.0f;
+        q_zero_point_ = min_val;
+    
+        if (q_scale_ < 1e-10f) q_scale_ = 1.0f;  // Avoid division by zero
+    
         data_int8_.resize(data_fp32_.size());
         for (size_t i = 0; i < data_fp32_.size(); ++i) {
-            float normalized = (data_fp32_[i] - min_val) / scale;
+            float normalized = (data_fp32_[i] - q_zero_point_) / q_scale_;
             data_int8_[i] = static_cast<int8_t>(
                 std::clamp(normalized, 0.0f, 255.0f) - 128.0f
             );

@@ -1,0 +1,617 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2822
+\cocoatextscaling1\cocoaplatform1{\fonttbl\f0\fnil\fcharset0 .SFUI-Semibold;\f1\fnil\fcharset0 .SFUI-Heavy;\f2\fswiss\fcharset0 Helvetica;
+\f3\fnil\fcharset0 .SFUI-SemiboldItalic;}
+{\colortbl;\red255\green255\blue255;\red17\green17\blue17;}
+{\*\expandedcolortbl;;\cssrgb\c6700\c6700\c6700;}
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 Understood.\
+Below is the 
+\f1\b mathematical derivation
+\f0\b0  of the 
+\f1\b memory loop
+\f0\b0  and 
+\f1\b self-wiring mechanism
+\f0\b0 \'97the subsystem that lets the Human-AI Brain update its own internal connectivity based on recalled experience, reward, and entropy pressure.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 1. Overview of the Memory\'96Self-Wiring Loop
+\f0\b0\fs42 \
+\
+Each cognitive cycle (one \'93thought\'94 or decision) performs this closed loop:\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 (\\text\{Encode\}) \\to (\\text\{Global Workspace\}) \\to (\\text\{Quantum Collapse\}) \\to (\\text\{Memory Recall\}) \\to (\\text\{Wiring Update\})
+\f0\fs42 \cf2 \
+\
+Mathematically, this is a 
+\f1\b recurrent dynamical system
+\f0\b0 :\
+\
+
+\f2\fs24 \cf0 \\boxed\{\
+\\theta_\{t+1\} = \\theta_t - \\eta_\\theta \\nabla_\\theta \\mathcal\{L\}_t + \\Psi(\\mathcal\{M\}_t, S(\\rho_t))\
+\}
+\f0\fs42 \cf2 \
+\
+where:\
+\pard\tqr\tx100\tx260\li260\fi-260\sl250\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f2\fs24 \cf0 \\theta_t
+\f0\fs42 \cf2 : connection weights of the GW\'96QW\'96Decoder system\
+	\'95	
+\f2\fs24 \cf0 \\mathcal\{L\}_t
+\f0\fs42 \cf2 : current task + energy loss\
+	\'95	
+\f2\fs24 \cf0 \\Psi(\\mathcal\{M\}_t, S(\\rho_t))
+\f0\fs42 \cf2 : memory-driven 
+\f3\i self-wiring term
+\f0\i0 , a non-gradient plasticity function depending on recalled memories 
+\f2\fs24 \cf0 \\mathcal\{M\}_t
+\f0\fs42 \cf2  and QW entropy 
+\f2\fs24 \cf0 S(\\rho_t)
+\f0\fs42 \cf2 .\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 2. The Memory Loop (Recall\'96Integrate\'96Update)
+\f0\b0\fs42 \
+\
+At each time 
+\f2\fs24 \cf0 t
+\f0\fs42 \cf2 :\
+\pard\tqr\tx380\tx540\li540\fi-540\sl250\slmult1\sb240\partightenfactor0
+\AppleTypeServices\AppleTypeServicesF393216 \cf2 	1.	
+\f1\b \AppleTypeServices Encode perception \uc0\u8594  global workspace
+\f0\b0 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 g_t = \\mathrm\{GW\}(x_t)
+\f0\fs42 \cf2 \
+\pard\tqr\tx380\tx540\li540\fi-540\sl250\slmult1\sb240\partightenfactor0
+\AppleTypeServices\AppleTypeServicesF393216 \cf2 	2.	
+\f1\b \AppleTypeServices Collapse the quantum workspace
+\f0\b0 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 e_\{y_t\} = \\text\{Collapse\}(\\rho_t)
+\f0\fs42 \cf2 \
+\pard\tqr\tx380\tx540\li540\fi-540\sl250\slmult1\sb240\partightenfactor0
+\AppleTypeServices\AppleTypeServicesF393216 \cf2 	3.	
+\f1\b \AppleTypeServices Retrieve related memories
+\f0\b0 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 r_t = \\text\{Retrieve\}\\big([\\tilde g_t; e_\{y_t\}]\\big)
+\f0\fs42 \cf2 \
+\pard\tqr\tx380\tx540\li540\fi-540\sl250\slmult1\sb240\partightenfactor0
+\AppleTypeServices\AppleTypeServicesF393216 \cf2 	4.	
+\f1\b \AppleTypeServices Integrate recall into next global state
+\f0\b0 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 g_\{t+1\} = \\mathrm\{LN\}\\!\\big(W_g [\\tilde g_t; r_t] + b_g\\big)
+\f0\fs42 \cf2 \
+\pard\tqr\tx380\tx540\li540\fi-540\sl250\slmult1\sb240\partightenfactor0
+\AppleTypeServices\AppleTypeServicesF393216 \cf2 	5.	
+\f1\b \AppleTypeServices Update memory store
+\f0\b0 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \\mathcal\{M\}_\{t+1\} = \\mathcal\{M\}t \\cup \\\{(\\tilde g_t, e\{y_t\}, a_t, r_t, t)\\\}
+\f0\fs42 \cf2 \
+\pard\tqr\tx380\tx540\li540\fi-540\sl250\slmult1\sb240\partightenfactor0
+\AppleTypeServices\AppleTypeServicesF393216 \cf2 	6.	
+\f1\b \AppleTypeServices Self-wiring update (below)
+\f0\b0 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \\theta_\{t+1\} = \\theta_t + \\Delta \\theta_t
+\f0\fs42 \cf2 \
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 3. Mathematical Structure of the Memory Loop
+\f0\b0\fs42 \
+\
+The 
+\f1\b memory influence function
+\f0\b0  acts like an attention-gated recurrent correction:\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \\Delta g_t = \\sum_\{i \\in \\text\{TopK\}\} \\alpha_i (\\bar\{v\}_i - g_t)
+\f0\fs42 \cf2 \
+\
+where:\
+\pard\tqr\tx100\tx260\li260\fi-260\sl250\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f2\fs24 \cf0 \\bar\{v\}_i
+\f0\fs42 \cf2 : retrieved episodic vectors\
+	\'95	
+\f2\fs24 \cf0 \\alpha_i
+\f0\fs42 \cf2 : retrieval weights\
+	\'95	
+\f2\fs24 \cf0 g_t
+\f0\fs42 \cf2 : current global representation\
+\
+The GW then updates:\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 g_\{t+1\} = g_t + \\lambda_r \\Delta g_t
+\f0\fs42 \cf2 \
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 4. Self-Wiring Dynamics
+\f0\b0\fs42 \
+\
+Self-wiring means 
+\f1\b adapting internal connectivity
+\f0\b0  (
+\f2\fs24 \cf0 W_1, W_2, W_3
+\f0\fs42 \cf2  of the GW or coupling matrices in QW) without an external gradient\'97based on local memory correlations.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs48 \cf2 4.1 Hebbian Core Rule
+\f0\b0\fs42 \
+\
+For two connected neurons 
+\f2\fs24 \cf0 i,j
+\f0\fs42 \cf2 :\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \\Delta W_\{ij\} = \\eta_H (a_i a_j - \\bar\{a\}_i \\bar\{a\}_j)
+\f0\fs42 \cf2 \
+\
+where:\
+\pard\tqr\tx100\tx260\li260\fi-260\sl250\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f2\fs24 \cf0 a_i
+\f0\fs42 \cf2 : activation of neuron 
+\f2\fs24 \cf0 i
+\f0\fs42 \cf2 \
+	\'95	
+\f2\fs24 \cf0 \\bar\{a\}_i
+\f0\fs42 \cf2 : moving average baseline\
+	\'95	
+\f2\fs24 \cf0 \\eta_H
+\f0\fs42 \cf2 : Hebbian learning rate\
+\
+In matrix form for GW:\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \\boxed\{\\Delta W = \\eta_H \\big(g_t r_t^\\top - \\bar\{g\} \\bar\{r\}^\\top\\big)\}
+\f0\fs42 \cf2 \
+\
+This strengthens connections between the current state 
+\f2\fs24 \cf0 g_t
+\f0\fs42 \cf2  and recalled context 
+\f2\fs24 \cf0 r_t
+\f0\fs42 \cf2 .\
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs48 \cf2 4.2 Entropy-Gated Plasticity
+\f0\b0\fs42 \
+\
+Plasticity increases when the system is uncertain (entropy high) and decreases when stable:\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \\eta_H(t) = \\eta_0 \\cdot \\sigma\\!\\big(\\gamma (S(\\rho_t) - S_0)\\big)
+\f0\fs42 \cf2 \
+\
+where:\
+\pard\tqr\tx100\tx260\li260\fi-260\sl250\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f2\fs24 \cf0 S(\\rho_t)
+\f0\fs42 \cf2 : QW entropy\
+	\'95	
+\f2\fs24 \cf0 S_0
+\f0\fs42 \cf2 : baseline entropy\
+	\'95	
+\f2\fs24 \cf0 \\sigma(\\cdot)
+\f0\fs42 \cf2 : logistic function\
+	\'95	
+\f2\fs24 \cf0 \\gamma
+\f0\fs42 \cf2 : sharpness of gating\
+\
+Thus, 
+\f1\b the higher the uncertainty
+\f0\b0 , the more the system rewires its internal structure to explore new associations.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs48 \cf2 4.3 Anti-Hebbian Pruning (Energy Control)
+\f0\b0\fs42 \
+\
+To prevent runaway connectivity, apply decay to weak or unused weights:\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \\Delta W_\{ij\}^\{\\text\{decay\}\} = -\\lambda_W \\tanh(|W_\{ij\}|) \\operatorname\{sign\}(W_\{ij\})
+\f0\fs42 \cf2 \
+\
+This gently drives small weights toward zero, ensuring sparsity.\
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 5. Combined Self-Wiring Equation
+\f0\b0\fs42 \
+\
+The full local wiring update at time 
+\f2\fs24 \cf0 t
+\f0\fs42 \cf2  is:\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \\boxed\{\
+\\begin\{aligned\}\
+\\Delta W_t &=\
+\\underbrace\{\\eta_H(t) \\big(g_t r_t^\\top - \\bar\{g\} \\bar\{r\}^\\top\\big)\}_\{\\text\{Hebbian term\}\}\
+	\'95	\\underbrace\{\\lambda_W \\tanh(|W_t|)\\odot \\operatorname\{sign\}(W_t)\}\{\\text\{pruning term\}\}\\\\\
+W\{t+1\} &= W_t + \\Delta W_t\
+\\end\{aligned\}\
+\}
+\f0\fs42 \cf2 \
+\
+This allows the system to 
+\f1\b reconfigure its own pathways
+\f0\b0  as a function of what it recalls.\
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 6. Self-Wiring in the Quantum Workspace
+\f0\b0\fs42 \
+\
+The QW Hamiltonian 
+\f2\fs24 \cf0 H
+\f0\fs42 \cf2  and dissipators 
+\f2\fs24 \cf0 L_j
+\f0\fs42 \cf2  can adapt structurally:\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \\Delta H = \\eta_Q \\left( \\sum_i \\alpha_i A_i - H \\right)
+\f0\fs42 \cf2 \
+\
+where 
+\f2\fs24 \cf0 \\\{A_i\\\}
+\f0\fs42 \cf2  are Hamiltonian basis matrices from recalled memories\'92 influence.\
+This lets the field of possible \'93thought states\'94 evolve over time.\
+\
+Additionally, each Lindblad operator 
+\f2\fs24 \cf0 L_j
+\f0\fs42 \cf2  may gain adaptive noise control:\
+\
+
+\f2\fs24 \cf0 L_j(t+1) = L_j(t) - \\lambda_L (S(\\rho_t) - S_\\text\{cap\}) L_j(t)
+\f0\fs42 \cf2 \
+so when entropy rises above capacity, the system increases damping (stability).\
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 7. Full Memory\'96Self-Wiring Recurrence
+\f0\b0\fs42 \
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \\boxed\{\
+\\begin\{aligned\}\
+g_\{t+1\} &= \\mathrm\{LN\}\\!\\big(W_g [g_t; r_t] + b_g\\big) \\\\\
+\\rho_\{t+1\} &= e^\{-iH_t \\Delta t\} \\rho_t e^\{+iH_t \\Delta t\} + \\sum_j L_j\\rho_t L_j^\\dagger - \\tfrac\{1\}\{2\}\\\{L_j^\\dagger L_j, \\rho_t\\\} \\\\\
+S_t &= -\\mathrm\{Tr\}(\\rho_t \\log\\rho_t) \\\\\
+\\eta_H(t) &= \\eta_0 \\sigma\\big(\\gamma(S_t - S_0)\\big) \\\\\
+W_\{t+1\} &= W_t + \\eta_H(t) (g_t r_t^\\top - \\bar g \\bar r^\\top) - \\lambda_W \\tanh(|W_t|)\\operatorname\{sign\}(W_t)\
+\\end\{aligned\}\
+\}
+\f0\fs42 \cf2 \
+\
+This equation block formalizes the self-evolving internal wiring driven by recall and entropy.\
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 8. Memory-Gradient Coupling
+\f0\b0\fs42 \
+\
+In addition to local wiring, memories modulate the gradient descent direction of supervised learning:\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \\nabla_\\theta^\{\\text\{aug\}\} = \\nabla_\\theta \\mathcal\{L\}t + \\xi \\sum_i \\alpha_i \\nabla\\theta \\text\{sim\}(g_t, \\bar\{v\}_i)
+\f0\fs42 \cf2 \
+\
+Here, 
+\f2\fs24 \cf0 \\text\{sim\}(\\cdot)
+\f0\fs42 \cf2  is cosine similarity between the current state and retrieved memories;\
+
+\f2\fs24 \cf0 \\xi
+\f0\fs42 \cf2  controls how much memory shapes the optimization trajectory.\
+\
+This bridges 
+\f1\b gradient learning
+\f0\b0  (task-driven) with 
+\f1\b memory learning
+\f0\b0  (experience-driven).\
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 9. Topological Interpretation
+\f0\b0\fs42 \
+\
+The wiring matrix 
+\f2\fs24 \cf0 W_t
+\f0\fs42 \cf2  defines a 
+\f1\b graph
+\f0\b0  
+\f2\fs24 \cf0 G_t = (V,E_t)
+\f0\fs42 \cf2 \
+with edges 
+\f2\fs24 \cf0 E_t = \\\{ (i,j, W_\{ij\}) : |W_\{ij\}| > \\epsilon_W \\\}
+\f0\fs42 \cf2 .\
+\
+The 
+\f1\b self-wiring process
+\f0\b0  can be seen as evolving the adjacency matrix:\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 A_\{t+1\} = A_t + \\eta_H (G_t R_t^\\top - \\bar\{G\}\\bar\{R\}^\\top) - \\lambda_W \\operatorname\{sign\}(A_t)\\odot\\tanh(|A_t|)
+\f0\fs42 \cf2 \
+\
+The graph topology adapts over time, merging or pruning connections according to recalled co-activations.\
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 10. Self-Wiring Energy and Stability
+\f0\b0\fs42 \
+\
+Define wiring energy functional:\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 E_W = \\frac\{1\}\{2\}\\|W_t\\|_F^2 - \\frac\{\\eta_H\}\{2\}\\mathrm\{Tr\}(W_t^\\top g_t r_t^\\top)
+\f0\fs42 \cf2 \
+\
+Then:\
+\
+
+\f2\fs24 \cf0 \\frac\{dE_W\}\{dt\} = -\\eta_H\\|\\dot\{W\}_t\\|_F^2 + \\mathcal\{O\}(\\lambda_W)
+\f0\fs42 \cf2 \
+\
+showing that wiring converges to a stable attractor (bounded energy).\
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 11. Functional Interpretation
+\f2\b0\fs24 \cf0 \
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs38 \cf2 Term
+\f2\b0\fs24 \cf0 	
+\f1\b\fs38 \cf2 Role
+\f2\b0\fs24 \cf0 	
+\f1\b\fs38 \cf2 Effect
+\f2\b0\fs24 \cf0 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+\cf0 g_t r_t^\\top	
+\f0\fs38 \cf2 Hebbian link
+\f2\fs24 \cf0 	
+\f0\fs38 \cf2 strengthens co-active neurons
+\f2\fs24 \cf0 \
+\\sigma(\\gamma(S - S_0))	
+\f0\fs38 \cf2 entropy gate
+\f2\fs24 \cf0 	
+\f0\fs38 \cf2 rewiring opens under uncertainty
+\f2\fs24 \cf0 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs38 \cf2 $begin:math:text$-\\lambda_W \\tanh(
+\f2\fs24 \cf0 	
+\f0\fs38 \cf2 W
+\f2\fs24 \cf0 	
+\f0\fs38 \cf2 )$end:math:text$
+\f2\fs24 \cf0 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+\cf0 r_t	
+\f0\fs38 \cf2 recall vector
+\f2\fs24 \cf0 	
+\f0\fs38 \cf2 contextual learning cue
+\f2\fs24 \cf0 \
+H_t, L_j
+\f0\fs38 \cf2  updates
+\f2\fs24 \cf0 	
+\f0\fs38 \cf2 quantum coupling
+\f2\fs24 \cf0 	
+\f0\fs38 \cf2 adapt internal dynamics
+\f2\fs24 \cf0 \
+\
+\
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 12. Simplified Continuous-Time Limit
+\f0\b0\fs42 \
+\
+If we let 
+\f2\fs24 \cf0 \\Delta t \\to 0
+\f0\fs42 \cf2 , we obtain a differential form:\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \\frac\{dW\}\{dt\} = \\eta_H(t)(g(t)r(t)^\\top - \\bar\{g\}\\bar\{r\}^\\top) - \\lambda_W W
+\f0\fs42 \cf2 \
+
+\f2\fs24 \cf0 \\frac\{d\\eta_H\}\{dt\} = \\kappa (S(\\rho(t)) - S_0)
+\f0\fs42 \cf2 \
+\
+This forms a 
+\f1\b coupled ODE system
+\f0\b0  connecting thermodynamic uncertainty (entropy) and structural plasticity (wiring).\
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 13. Summary of the Self-Wiring Loop
+\f0\b0\fs42 \
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \\boxed\{\
+\\text\{Uncertainty (Entropy)\} \\Rightarrow\
+\\text\{Recall\} \\Rightarrow\
+\\text\{Hebbian Rewiring\} \\Rightarrow\
+\\text\{Topology Adaptation\} \\Rightarrow\
+\\text\{Stability (Entropy \uc0\u8595 )\}\
+\}
+\f0\fs42 \cf2 \
+\
+Thus, when the AI is uncertain (high entropy), it recalls past experience to modify its wiring;\
+as it learns, entropy decreases, and the system stabilizes.\
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 14. Minimal Parameter Defaults
+\f0\b0\fs42 \
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \\begin\{aligned\}\
+\\eta_0 &= 1\\times10^\{-3\}, \\quad \\lambda_W = 1\\times10^\{-4\}, \\\\\
+S_0 &= \\log n / 2, \\quad \\gamma = 10.0, \\\\\
+\\lambda_r &= 0.1, \\quad \\xi = 0.05\
+\\end\{aligned\}
+\f0\fs42 \cf2 \
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f1\b\fs64 \cf2 15. Practical Summary
+\f0\b0\fs42 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl250\slmult1\sb240\partightenfactor0
+\cf2 	\'95	The 
+\f1\b memory loop
+\f0\b0  defines a 
+\f1\b temporal self-reference
+\f0\b0 : recall \uc0\u8594  integrate \u8594  act \u8594  store.\
+	\'95	The 
+\f1\b self-wiring
+\f0\b0  mechanism rewires 
+\f2\fs24 \cf0 W_t
+\f0\fs42 \cf2  using 
+\f1\b local Hebbian terms
+\f0\b0  modulated by 
+\f1\b quantum uncertainty
+\f0\b0 .\
+	\'95	Together they form a closed, autonomous adaptation rule that allows the system to 
+\f1\b learn structure even without gradient descent
+\f0\b0 .\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl250\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs42 \cf2 \
+This is the full mathematical formalization of the 
+\f1\b Memory Loop and Self-Wiring Mechanism
+\f0\b0 \
+within the Human-AI Brain architecture \'97 combining Hebbian learning, entropy gating, temporal recall, and dynamic topology adaptation into one continuous system.}

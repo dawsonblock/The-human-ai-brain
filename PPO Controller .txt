@@ -1,0 +1,590 @@
+"""
+Proximal Policy Optimization for Metacognitive Capacity Selection
+Learns optimal n ∈ {4, 6, 9, 12} based on task demands
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.distributions import Categorical
+import numpy as np
+from collections import deque
+from dataclasses import dataclass
+from typing import List, Tuple, Dict, Optional
+
+@dataclass
+class PPOConfig:
+    """PPO hyperparameters tuned for metacognitive control"""
+    
+    # Learning parameters
+    learning_rate: float = 3e-4
+    gamma: float = 0.99              # Discount factor
+    gae_lambda: float = 0.95         # GAE advantage estimation
+    clip_epsilon: float = 0.2        # PPO clipping range
+    
+    # Training parameters
+    n_epochs: int = 10               # Updates per batch
+    batch_size: int = 64
+    n_steps: int = 2048              # Steps before update
+    minibatch_size: int = 32
+    
+    # Value function
+    vf_coef: float = 0.5             # Value loss coefficient
+    entropy_coef: float = 0.01       # Entropy bonus
+    max_grad_norm: float = 0.5       # Gradient clipping
+    
+    # Capacity-specific rewards
+    capacity_levels: List[int] = (4, 6, 9, 12)
+    energy_penalty_weight: float = 0.1
+    accuracy_reward_weight: float = 1.0
+
+
+class MetacognitiveState:
+    """
+    State representation for capacity selection
+    Encapsulates all information needed for decision
+    """
+    def __init__(self,
+                 global_repr: torch.Tensor,          # (d_global,) workspace content
+                 task_difficulty: float,             # [0,1] estimated difficulty
+                 recent_accuracy: float,             # [0,1] rolling accuracy
+                 energy_budget: float,               # [0,1] remaining energy
+                 prev_capacity_idx: int,             # Previous n selection
+                 steps_at_capacity: int,             # Stability metric
+                 error_rate: float,                  # Recent error frequency
+                 time_pressure: float):              # [0,1] urgency
+        
+        self.global_repr = global_repr
+        self.task_difficulty = task_difficulty
+        self.recent_accuracy = recent_accuracy
+        self.energy_budget = energy_budget
+        self.prev_capacity_idx = prev_capacity_idx
+        self.steps_at_capacity = steps_at_capacity
+        self.error_rate = error_rate
+        self.time_pressure = time_pressure
+    
+    def to_tensor(self, device: torch.device) -> torch.Tensor:
+        """Convert to network input tensor"""
+        # Concatenate all features
+        scalar_features = torch.tensor([
+            self.task_difficulty,
+            self.recent_accuracy,
+            self.energy_budget,
+            float(self.prev_capacity_idx),
+            float(self.steps_at_capacity) / 100.0,  # Normalize
+            self.error_rate,
+            self.time_pressure
+        ], device=device)
+        
+        # Combine with global representation
+        state_vector = torch.cat([
+            self.global_repr.to(device),
+            scalar_features
+        ])
+        
+        return state_vector
+
+
+class ActorCriticNetwork(nn.Module):
+    """
+    Actor-Critic architecture for capacity selection
+    
+    Actor: state → policy over {4, 6, 9, 12}
+    Critic: state → expected return (value function)
+    """
+    def __init__(self, config: FDQCConfig, ppo_config: PPOConfig):
+        super().__init__()
+        self.config = config
+        self.ppo_config = ppo_config
+        
+        # Input: global_repr (60D) + 7 scalar features
+        input_dim = config.d_global + 7
+        
+        # Shared feature extractor
+        self.shared = nn.Sequential(
+            nn.Linear(input_dim, 256),
+            nn.LayerNorm(256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.LayerNorm(256),
+            nn.ReLU()
+        )
+        
+        # Actor head (policy)
+        self.actor = nn.Sequential(
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, len(ppo_config.capacity_levels))
+        )
+        
+        # Critic head (value function)
+        self.critic = nn.Sequential(
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 1)
+        )
+        
+        # Initialize weights (orthogonal initialization for stability)
+        self.apply(self._init_weights)
+    
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            nn.init.orthogonal_(module.weight, gain=np.sqrt(2))
+            nn.init.constant_(module.bias, 0.0)
+    
+    def forward(self, state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass through actor-critic
+        
+        Args:
+            state: (batch, input_dim) state representation
+            
+        Returns:
+            action_probs: (batch, n_capacities) policy distribution
+            values: (batch, 1) state value estimates
+        """
+        # Shared features
+        features = self.shared(state)  # (batch, 256)
+        
+        # Actor output
+        action_logits = self.actor(features)  # (batch, n_capacities)
+        action_probs = F.softmax(action_logits, dim=-1)
+        
+        # Critic output
+        values = self.critic(features)  # (batch, 1)
+        
+        return action_probs, values
+    
+    def get_action_and_value(self, 
+                            state: torch.Tensor,
+                            action: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
+        """
+        Sample action and compute log probability + value
+        
+        Args:
+            state: (batch, input_dim)
+            action: (batch,) optional - if provided, compute log prob of this action
+            
+        Returns:
+            dict with keys:
+                - action: (batch,) sampled or provided action
+                - log_prob: (batch,) log π(action|state)
+                - value: (batch,) V(state)
+                - entropy: (batch,) policy entropy
+        """
+        action_probs, values = self.forward(state)
+        
+        # Create categorical distribution
+        dist = Categorical(action_probs)
+        
+        if action is None:
+            # Sample action
+            action = dist.sample()
+        
+        # Compute log probability
+        log_prob = dist.log_prob(action)
+        
+        # Compute entropy
+        entropy = dist.entropy()
+        
+        return {
+            'action': action,
+            'log_prob': log_prob,
+            'value': values.squeeze(-1),
+            'entropy': entropy
+        }
+
+
+class PPOTrainer:
+    """
+    Complete PPO training loop for metacognitive controller
+    """
+    def __init__(self,
+                 fdqc_config: FDQCConfig,
+                 ppo_config: PPOConfig,
+                 device: torch.device):
+        
+        self.fdqc_config = fdqc_config
+        self.ppo_config = ppo_config
+        self.device = device
+        
+        # Initialize actor-critic network
+        self.network = ActorCriticNetwork(fdqc_config, ppo_config).to(device)
+        
+        # Optimizer
+        self.optimizer = torch.optim.Adam(
+            self.network.parameters(),
+            lr=ppo_config.learning_rate,
+            eps=1e-5
+        )
+        
+        # Experience buffer
+        self.rollout_buffer = RolloutBuffer(
+            ppo_config.n_steps,
+            fdqc_config.d_global + 7,  # State dimension
+            device
+        )
+        
+        # Training statistics
+        self.total_timesteps = 0
+        self.episode_rewards = deque(maxlen=100)
+        self.episode_lengths = deque(maxlen=100)
+        
+    def compute_rewards(self,
+                       capacity_idx: int,
+                       task_accuracy: float,
+                       energy_used: float,
+                       prev_capacity_idx: int) -> float:
+        """
+        Reward function for capacity selection
+        
+        Rewards:
+        - High accuracy (main objective)
+        - Low energy usage (efficiency)
+        - Stability (avoid unnecessary switches)
+        
+        Args:
+            capacity_idx: Selected capacity index
+            task_accuracy: Task performance [0,1]
+            energy_used: Energy consumed this step
+            prev_capacity_idx: Previous capacity choice
+            
+        Returns:
+            reward: Scalar reward signal
+        """
+        # Accuracy reward (primary)
+        reward = self.ppo_config.accuracy_reward_weight * task_accuracy
+        
+        # Energy penalty (encourage efficiency)
+        capacity = self.ppo_config.capacity_levels[capacity_idx]
+        energy_penalty = self.ppo_config.energy_penalty_weight * (energy_used / (capacity ** 2))
+        reward -= energy_penalty
+        
+        # Stability bonus (penalize excessive switching)
+        if capacity_idx != prev_capacity_idx:
+            reward -= 0.05  # Small penalty for switching
+        
+        # Crisis detection bonus (reward upshifts when accuracy drops)
+        if task_accuracy < 0.7 and capacity_idx > prev_capacity_idx:
+            reward += 0.2  # Bonus for appropriate escalation
+        
+        # Efficiency bonus (reward downshifts when task is easy)
+        if task_accuracy > 0.95 and capacity_idx < prev_capacity_idx:
+            reward += 0.1  # Bonus for energy conservation
+        
+        return reward
+    
+    def collect_rollouts(self,
+                        env,  # Task environment
+                        n_steps: int) -> Dict[str, float]:
+        """
+        Collect n_steps of experience from environment
+        
+        Args:
+            env: Task environment with step() and reset() methods
+            n_steps: Number of steps to collect
+            
+        Returns:
+            stats: Dictionary of collection statistics
+        """
+        self.network.eval()
+        
+        episode_reward = 0
+        episode_length = 0
+        n_episodes = 0
+        
+        state_dict = env.reset()
+        
+        for step in range(n_steps):
+            # Convert state to tensor
+            state_tensor = state_dict['metacognitive_state'].to_tensor(self.device).unsqueeze(0)
+            
+            # Get action from policy
+            with torch.no_grad():
+                action_dict = self.network.get_action_and_value(state_tensor)
+            
+            capacity_idx = action_dict['action'].item()
+            
+            # Execute action in environment
+            next_state_dict, reward, done, info = env.step(capacity_idx)
+            
+            # Compute actual reward using our reward function
+            reward = self.compute_rewards(
+                capacity_idx=capacity_idx,
+                task_accuracy=info['task_accuracy'],
+                energy_used=info['energy_used'],
+                prev_capacity_idx=state_dict.get('prev_capacity_idx', capacity_idx)
+            )
+            
+            # Store in buffer
+            self.rollout_buffer.add(
+                state=state_tensor.squeeze(0),
+                action=action_dict['action'],
+                log_prob=action_dict['log_prob'],
+                value=action_dict['value'],
+                reward=torch.tensor([reward], device=self.device),
+                done=torch.tensor([done], device=self.device)
+            )
+            
+            episode_reward += reward
+            episode_length += 1
+            
+            if done:
+                self.episode_rewards.append(episode_reward)
+                self.episode_lengths.append(episode_length)
+                n_episodes += 1
+                
+                episode_reward = 0
+                episode_length = 0
+                state_dict = env.reset()
+            else:
+                state_dict = next_state_dict
+        
+        # Compute advantages using GAE
+        self.rollout_buffer.compute_returns_and_advantages(
+            last_value=action_dict['value'],
+            gamma=self.ppo_config.gamma,
+            gae_lambda=self.ppo_config.gae_lambda
+        )
+        
+        stats = {
+            'mean_episode_reward': np.mean(self.episode_rewards) if len(self.episode_rewards) > 0 else 0,
+            'mean_episode_length': np.mean(self.episode_lengths) if len(self.episode_lengths) > 0 else 0,
+            'n_episodes': n_episodes
+        }
+        
+        return stats
+    
+    def train(self) -> Dict[str, float]:
+        """
+        Perform PPO update using collected rollouts
+        
+        Returns:
+            training_stats: Dictionary of training metrics
+        """
+        self.network.train()
+        
+        # Get rollout data
+        rollout_data = self.rollout_buffer.get()
+        
+        # Training statistics
+        pg_losses = []
+        value_losses = []
+        entropy_losses = []
+        approx_kl_divs = []
+        clip_fractions = []
+        
+        # Multiple epochs over the same data
+        for epoch in range(self.ppo_config.n_epochs):
+            # Shuffle and create minibatches
+            indices = torch.randperm(self.ppo_config.n_steps, device=self.device)
+            
+            for start_idx in range(0, self.ppo_config.n_steps, self.ppo_config.minibatch_size):
+                end_idx = start_idx + self.ppo_config.minibatch_size
+                mb_indices = indices[start_idx:end_idx]
+                
+                # Get minibatch
+                mb_states = rollout_data['states'][mb_indices]
+                mb_actions = rollout_data['actions'][mb_indices]
+                mb_old_log_probs = rollout_data['log_probs'][mb_indices]
+                mb_advantages = rollout_data['advantages'][mb_indices]
+                mb_returns = rollout_data['returns'][mb_indices]
+                
+                # Forward pass
+                action_dict = self.network.get_action_and_value(mb_states, mb_actions)
+                new_log_probs = action_dict['log_prob']
+                new_values = action_dict['value']
+                entropy = action_dict['entropy']
+                
+                # ============ Policy Loss (PPO Clip) ============
+                # Compute ratio: π_new / π_old
+                log_ratio = new_log_probs - mb_old_log_probs
+                ratio = torch.exp(log_ratio)
+                
+                # Compute approximate KL divergence
+                with torch.no_grad():
+                    approx_kl = ((ratio - 1) - log_ratio).mean()
+                    approx_kl_divs.append(approx_kl.item())
+                
+                # Normalize advantages
+                mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
+                
+                # Clipped surrogate objective
+                pg_loss1 = -mb_advantages * ratio
+                pg_loss2 = -mb_advantages * torch.clamp(
+                    ratio,
+                    1 - self.ppo_config.clip_epsilon,
+                    1 + self.ppo_config.clip_epsilon
+                )
+                pg_loss = torch.max(pg_loss1, pg_loss2).mean()
+                
+                # Clip fraction (diagnostic)
+                with torch.no_grad():
+                    clip_fraction = ((ratio - 1).abs() > self.ppo_config.clip_epsilon).float().mean()
+                    clip_fractions.append(clip_fraction.item())
+                
+                # ============ Value Loss ============
+                # Clipped value loss (optional but helps stability)
+                value_pred_clipped = rollout_data['values'][mb_indices] + torch.clamp(
+                    new_values - rollout_data['values'][mb_indices],
+                    -self.ppo_config.clip_epsilon,
+                    self.ppo_config.clip_epsilon
+                )
+                value_loss1 = F.mse_loss(new_values, mb_returns)
+                value_loss2 = F.mse_loss(value_pred_clipped, mb_returns)
+                value_loss = torch.max(value_loss1, value_loss2)
+                
+                # ============ Entropy Bonus ============
+                entropy_loss = -entropy.mean()
+                
+                # ============ Total Loss ============
+                loss = (pg_loss + 
+                       self.ppo_config.vf_coef * value_loss + 
+                       self.ppo_config.entropy_coef * entropy_loss)
+                
+                # Backpropagation
+                self.optimizer.zero_grad()
+                loss.backward()
+                nn.utils.clip_grad_norm_(
+                    self.network.parameters(),
+                    self.ppo_config.max_grad_norm
+                )
+                self.optimizer.step()
+                
+                # Record losses
+                pg_losses.append(pg_loss.item())
+                value_losses.append(value_loss.item())
+                entropy_losses.append(entropy_loss.item())
+        
+        # Clear buffer
+        self.rollout_buffer.reset()
+        
+        # Compile statistics
+        training_stats = {
+            'policy_loss': np.mean(pg_losses),
+            'value_loss': np.mean(value_losses),
+            'entropy_loss': np.mean(entropy_losses),
+            'approx_kl': np.mean(approx_kl_divs),
+            'clip_fraction': np.mean(clip_fractions)
+        }
+        
+        return training_stats
+    
+    def learn(self,
+             env,
+             total_timesteps: int,
+             log_interval: int = 10) -> None:
+        """
+        Main training loop
+        
+        Args:
+            env: Task environment
+            total_timesteps: Total training steps
+            log_interval: Log statistics every N updates
+        """
+        n_updates = total_timesteps // self.ppo_config.n_steps
+        
+        print("=" * 60)
+        print(f"Starting PPO Training")
+        print(f"Total timesteps: {total_timesteps}")
+        print(f"Updates: {n_updates}")
+        print(f"Steps per update: {self.ppo_config.n_steps}")
+        print("=" * 60)
+        
+        for update in range(1, n_updates + 1):
+            # Collect rollouts
+            collection_stats = self.collect_rollouts(env, self.ppo_config.n_steps)
+            
+            # Perform update
+            training_stats = self.train()
+            
+            self.total_timesteps += self.ppo_config.n_steps
+            
+            # Logging
+            if update % log_interval == 0:
+                print(f"\nUpdate {update}/{n_updates}")
+                print(f"  Timesteps: {self.total_timesteps}/{total_timesteps}")
+                print(f"  Mean Episode Reward: {collection_stats['mean_episode_reward']:.2f}")
+                print(f"  Mean Episode Length: {collection_stats['mean_episode_length']:.1f}")
+                print(f"  Policy Loss: {training_stats['policy_loss']:.4f}")
+                print(f"  Value Loss: {training_stats['value_loss']:.4f}")
+                print(f"  Approx KL: {training_stats['approx_kl']:.4f}")
+                print(f"  Clip Fraction: {training_stats['clip_fraction']:.3f}")
+
+
+class RolloutBuffer:
+    """
+    Storage for PPO rollout data with GAE computation
+    """
+    def __init__(self, buffer_size: int, state_dim: int, device: torch.device):
+        self.buffer_size = buffer_size
+        self.state_dim = state_dim
+        self.device = device
+        self.reset()
+    
+    def reset(self):
+        """Clear buffer"""
+        self.states = torch.zeros((self.buffer_size, self.state_dim), device=self.device)
+        self.actions = torch.zeros(self.buffer_size, dtype=torch.long, device=self.device)
+        self.log_probs = torch.zeros(self.buffer_size, device=self.device)
+        self.values = torch.zeros(self.buffer_size, device=self.device)
+        self.rewards = torch.zeros(self.buffer_size, device=self.device)
+        self.dones = torch.zeros(self.buffer_size, device=self.device)
+        self.advantages = torch.zeros(self.buffer_size, device=self.device)
+        self.returns = torch.zeros(self.buffer_size, device=self.device)
+        self.pos = 0
+        self.full = False
+    
+    def add(self, state, action, log_prob, value, reward, done):
+        """Add transition to buffer"""
+        self.states[self.pos] = state
+        self.actions[self.pos] = action
+        self.log_probs[self.pos] = log_prob
+        self.values[self.pos] = value
+        self.rewards[self.pos] = reward
+        self.dones[self.pos] = done
+        
+        self.pos += 1
+        if self.pos == self.buffer_size:
+            self.full = True
+            self.pos = 0
+    
+    def compute_returns_and_advantages(self, last_value, gamma, gae_lambda):
+        """
+        Compute GAE advantages and returns
+        
+        Uses Generalized Advantage Estimation (Schulman et al., 2016)
+        A_t = δ_t + (γλ)δ_{t+1} + (γλ)^2 δ_{t+2} + ...
+        where δ_t = r_t + γV(s_{t+1}) - V(s_t)
+        """
+        last_gae = 0
+        
+        for step in reversed(range(self.buffer_size)):
+            if step == self.buffer_size - 1:
+                next_non_terminal = 1.0 - self.dones[step]
+                next_value = last_value
+            else:
+                next_non_terminal = 1.0 - self.dones[step]
+                next_value = self.values[step + 1]
+            
+            # TD error
+            delta = self.rewards[step] + gamma * next_value * next_non_terminal - self.values[step]
+            
+            # GAE
+            last_gae = delta + gamma * gae_lambda * next_non_terminal * last_gae
+            self.advantages[step] = last_gae
+        
+        # Returns = advantages + values
+        self.returns = self.advantages + self.values
+    
+    def get(self):
+        """Get all buffer data"""
+        return {
+            'states': self.states,
+            'actions': self.actions,
+            'log_probs': self.log_probs,
+            'values': self.values,
+            'rewards': self.rewards,
+            'advantages': self.advantages,
+            'returns': self.returns
+        }

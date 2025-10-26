@@ -1,0 +1,32 @@
+{
+  "version": "1.0",
+  "allow": [
+    "brain.step",
+    "brain.health",
+    "brain.getstate",
+    "memory.query",
+    "memory.upsert",
+    "memory.recall"
+  ],
+  "deny": [
+    "fs.*",
+    "net.connect.*",
+    "exec.*",
+    "system.*"
+  ],
+  "rate_limits": {
+    "brain.step": {
+      "requests_per_second": 100,
+      "burst": 200
+    },
+    "memory.query": {
+      "requests_per_second": 1000,
+      "burst": 2000
+    }
+  },
+  "audit": {
+    "enabled": true,
+    "log_all_requests": true,
+    "merkle_tree": true
+  }
+}

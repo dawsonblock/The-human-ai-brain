@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package hab;
+
+// Health check
+message HealthReq {}
+
+message HealthResp {
+  string status = 1;
+  string version = 2;
+  int64 uptime_ms = 3;
+}
+
+// Cognitive step
+message StepReq {
+  repeated double input = 1;  // Input stimulus vector
+  map<string, string> context = 2;
+}
+
+message StepResp {
+  repeated double h_wm = 1;  // Working memory state
+  repeated double h_global = 2;  // Global workspace state
+  int32 collapsed_index = 3;  // Selected state index
+  double entropy = 4;
+  double trace_error = 5;
+  
+  // Phenomenal report
+  PhenomenalReport phenomenal = 6;
+  
+  // Metrics
+  Metrics metrics = 7;
+}
+
+message PhenomenalReport {
+  double intensity = 1;
+  double clarity = 2;
+  double valence = 3;
+  double arousal = 4;
+  double flow = 5;
+  double control = 6;
+  double presence = 7;
+  double self_salience = 8;
+}
+
+message Metrics {
+  double gw_sparsity = 1;
+  double wiring_energy = 2;
+  double collapse_rate_hz = 3;
+  int64 step_latency_us = 4;
+}
+
+// State query
+message StateReq {}
+
+message StateResp {
+  repeated double rho_real = 1;  // Density matrix (real part, flattened)
+  repeated double rho_imag = 2;  // Density matrix (imag part, flattened)
+  int32 dimension = 3;
+  double entropy = 4;
+  repeated double eigenvalues = 5;
+  
+  // Memory state
+  MemoryState memory = 6;
+}
+
+message MemoryState {
+  int32 stm_size = 1;
+  int32 ltm_size = 2;
+  double cache_hit_rate = 3;
+}
+
+// Brain service
+service Brain {
+  rpc Health(HealthReq) returns (HealthResp);
+  rpc Step(StepReq) returns (StepResp);
+  rpc GetState(StateReq) returns (StateResp);
+}

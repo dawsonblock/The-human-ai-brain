@@ -1,0 +1,811 @@
+Perfect! Now I understand your current architecture. Let me create a **precise connection diagram** showing exactly where everything plugs in:
+
+---
+
+# 🔌 EXACT CONNECTION MAP: NumPy Prototype → PyTorch Production
+
+## Current System Analysis
+
+Based on your README, you have:
+
+```python
+# YOUR CURRENT NUMPY SYSTEM (fdqc_v4_demo_compact.py)
+
+class FDQCv4:
+    def __init__(self):
+        self.wm = WorkingMemory()              # ← NumPy arrays
+        self.affect = AffectiveCore()          # ← Simple Python class
+        self.crisis = CrisisDetector()         # ← Statistical detector
+        self.timestep = 0
+    
+    def process_input(self, item):             # ← Takes NumPy array
+        # Your current flow:
+        # 1. Input → Working Memory (direct add)
+        # 2. Compute entropy/energy
+        # 3. Check capacity
+        # 4. Return state
+        pass
+```
+
+---
+
+## 🎯 Connection Points: Where Each Component Plugs In
+
+### **CONNECTION 1: Input Encoding (REPLACE)**
+
+**Current System:**
+```python
+# Your current: demos/fdqc_v4_demo_compact.py
+def process_input(self, item: np.ndarray):
+    """Takes raw NumPy array (60D)"""
+    self.wm.add(item, importance=np.random.uniform(0.5, 1.0))
+```
+
+**Connect To: PretrainedGlobalEncoder**
+```python
+# NEW: src/fdqc_pytorch_integration.py
+class FDQCv4_PyTorch:
+    def __init__(self, config):
+        # ADD THIS: Replaces your raw input
+        self.global_encoder = PretrainedGlobalEncoder(config)
+        
+        # Keep your existing components
+        self.wm = WorkingMemory()  # Will be upgraded next
+        self.affect = AffectiveCore()
+        self.crisis = CrisisDetector()
+    
+    def process_input(self, 
+                     text: str = None,           # NEW: Text input
+                     image: PIL.Image = None,    # NEW: Image input
+                     raw_array: np.ndarray = None):  # OLD: Fallback
+        """
+        🔌 CONNECTION POINT 1: Input encoding
+        """
+        if text is not None or image is not None:
+            # NEW PATH: Use pretrained encoder
+            with torch.no_grad():
+                global_repr = self.global_encoder(
+                    text_ids=tokenize(text) if text else None,
+                    text_mask=mask(text) if text else None,
+                    images=process_image(image) if image else None
+                )
+            # Convert to NumPy for compatibility
+            item = global_repr.cpu().numpy()
+        else:
+            # OLD PATH: Direct NumPy input (backward compatible)
+            item = raw_array
+        
+        # Continue with existing logic
+        self.wm.add(item, importance=1.0)
+```
+
+**What This Does:**
+- ✅ Accepts text/images (not just arrays)
+- ✅ Uses BERT/ViT pretrained encoders
+- ✅ Backward compatible with your NumPy arrays
+- ✅ Outputs 60D global representation (same as before)
+
+---
+
+### **CONNECTION 2: Working Memory (ENHANCE)**
+
+**Current System:**
+```python
+# Your current: Working Memory class
+class WorkingMemory:
+    def __init__(self):
+        self.slots = []                    # List of items
+        self.activations = []              # List of importance values
+        self.base_capacity = N_STAR = 4
+        self.entropy = 0.0
+        self.energy = 0.0
+```
+
+**Connect To: ConsciousWorkspace + ProjectionNetwork**
+```python
+# NEW: Upgrade your WorkingMemory
+class WorkingMemory_PyTorch:
+    def __init__(self, config):
+        # ADD THIS: Learnable projection
+        self.projection = ProjectionNetwork(config)
+        self.workspace = ConsciousWorkspace(config)
+        
+        # Keep your existing logic
+        self.slots = []
+        self.activations = []
+        self.base_capacity = 4
+        self.current_capacity = 4
+    
+    def add(self, global_repr: np.ndarray, importance: float):
+        """
+        🔌 CONNECTION POINT 2: Working Memory upgrade
+        """
+        # Convert to PyTorch
+        global_tensor = torch.from_numpy(global_repr).float().unsqueeze(0)
+        
+        # NEW: Project to conscious workspace
+        conscious_state, importance_weights = self.projection(
+            global_tensor,
+            n_capacity=self.current_capacity
+        )
+        
+        # NEW: Apply workspace dynamics (collapse, entropy)
+        workspace_output = self.workspace(
+            conscious_state,
+            timestep=self.get_timestep()
+        )
+        
+        # Convert back to NumPy for compatibility
+        state_np = workspace_output['state'].cpu().numpy().squeeze()
+        
+        # Continue with existing logic
+        if len(self.slots) < self.current_capacity:
+            self.slots.append(state_np)
+            self.activations.append(importance)
+            
+            # Update metrics (now from PyTorch)
+            self.entropy = workspace_output['entropy'].item()
+            self.energy = workspace_output['energy'].item()
+            return True
+        return False
+```
+
+**What This Does:**
+- ✅ Adds learnable projection (60D → n dimensions)
+- ✅ Adds quantum-inspired collapse mechanics
+- ✅ Keeps your existing capacity logic
+- ✅ Backward compatible with NumPy interface
+
+---
+
+### **CONNECTION 3: Capacity Selection (ADD)**
+
+**Current System:**
+```python
+# Your current: Fixed capacity with crisis expansion
+if crisis:
+    self.wm.expand(self.wm.max_capacity)  # 4 → 15
+```
+
+**Connect To: PPO Metacognitive Controller**
+```python
+# NEW: Add metacognitive controller
+class FDQCv4_PyTorch:
+    def __init__(self, config):
+        # ... existing components ...
+        
+        # ADD THIS: PPO-trained capacity selector
+        self.metacognitive_controller = ActorCriticNetwork(config, ppo_config)
+        self.ppo_trainer = PPOTrainer(config, ppo_config, device)
+    
+    def select_capacity(self, 
+                       global_repr: np.ndarray,
+                       task_difficulty: float,
+                       recent_accuracy: float) -> int:
+        """
+        🔌 CONNECTION POINT 3: Dynamic capacity selection
+        """
+        # Create metacognitive state
+        state = MetacognitiveState(
+            global_repr=torch.from_numpy(global_repr),
+            task_difficulty=task_difficulty,
+            recent_accuracy=recent_accuracy,
+            energy_budget=self.get_energy_budget(),
+            prev_capacity_idx=self.current_capacity_idx,
+            steps_at_capacity=self.steps_at_capacity,
+            error_rate=self.get_error_rate(),
+            time_pressure=0.0
+        )
+        
+        # NEW: PPO policy decides capacity
+        state_tensor = state.to_tensor(self.device).unsqueeze(0)
+        with torch.no_grad():
+            action_dict = self.metacognitive_controller.get_action_and_value(state_tensor)
+        
+        capacity_idx = action_dict['action'].item()
+        new_capacity = config.n_wm_levels[capacity_idx]  # {4, 6, 9, 12}
+        
+        # Apply to your existing WM
+        self.wm.current_capacity = new_capacity
+        
+        return capacity_idx
+    
+    def process_outcome(self, reward, error):
+        """
+        🔌 CONNECTION POINT 4: Learn from outcomes
+        """
+        # Keep your existing affective logic
+        self.affect.process_outcome(reward)
+        
+        # NEW: Train PPO controller
+        # (Collects experience for later training)
+        self.ppo_trainer.rollout_buffer.add(
+            state=self.last_state,
+            action=self.last_capacity_idx,
+            log_prob=self.last_log_prob,
+            value=self.last_value,
+            reward=torch.tensor([reward]),
+            done=torch.tensor([False])
+        )
+```
+
+**What This Does:**
+- ✅ Replaces fixed crisis detection with learned policy
+- ✅ Selects from {4, 6, 9, 12} based on task demands
+- ✅ Learns optimal trade-offs (accuracy vs energy)
+- ✅ Still supports your crisis escalation logic
+
+---
+
+### **CONNECTION 4: Imagination Engine (UPGRADE)**
+
+**Current System:**
+```python
+# Your current: Basic imagination (if you have it)
+# Probably simple forward simulation
+```
+
+**Connect To: ImaginationEngine**
+```python
+class FDQCv4_PyTorch:
+    def __init__(self, config):
+        # ... existing components ...
+        
+        # ADD THIS: Trainable world model
+        self.imagination = ImaginationEngine(config)
+    
+    def imagine_future(self, 
+                      current_state: np.ndarray,
+                      action: int,
+                      n_steps: int = 5):
+        """
+        🔌 CONNECTION POINT 5: Planning via imagination
+        """
+        state_tensor = torch.from_numpy(current_state).float().unsqueeze(0)
+        
+        # NEW: Multi-step rollout
+        trajectory = []
+        predicted_rewards = []
+        
+        for step in range(n_steps):
+            # Predict next state
+            next_state, reward = self.imagination.imagine_forward(
+                state_tensor,
+                torch.tensor([action])
+            )
+            
+            trajectory.append(next_state.cpu().numpy())
+            predicted_rewards.append(reward.item())
+            
+            state_tensor = next_state
+        
+        return trajectory, predicted_rewards
+    
+    def plan_actions(self, goal_state: np.ndarray):
+        """
+        🔌 CONNECTION POINT 6: Goal-directed planning
+        """
+        current = torch.from_numpy(self.get_current_state()).float().unsqueeze(0)
+        goal = torch.from_numpy(goal_state).float().unsqueeze(0)
+        
+        # NEW: Tree search for action sequence
+        planned_actions = self.imagination.plan(
+            current_state=current,
+            goal_state=goal,
+            horizon=5
+        )
+        
+        return [a.item() for a in planned_actions]
+```
+
+**What This Does:**
+- ✅ Replaces simple forward sim with learned world model
+- ✅ Enables multi-step planning
+- ✅ Supports goal-directed behavior
+- ✅ Trainable via experience replay
+
+---
+
+### **CONNECTION 5: Chunking (NEW CAPABILITY)**
+
+**Current System:**
+```python
+# You DON'T have this yet
+# Your capacity: 4 → 7 is mentioned but not implemented
+```
+
+**Connect To: ChunkingAutoencoder**
+```python
+class FDQCv4_PyTorch:
+    def __init__(self, config):
+        # ... existing components ...
+        
+        # ADD THIS: Temporal pattern compression
+        self.chunking = ChunkingAutoencoder(config)
+    
+    def compress_sequence(self, sequence: List[np.ndarray]):
+        """
+        🔌 CONNECTION POINT 7: Chunking for capacity expansion
+        """
+        # Convert sequence to tensor
+        seq_tensor = torch.stack([
+            torch.from_numpy(s).float() for s in sequence
+        ]).unsqueeze(0)  # (1, seq_len, d_global)
+        
+        # NEW: Compress to single chunk
+        chunk = self.chunking.encode(seq_tensor)
+        
+        # Store chunk in WM (counts as 1 item but contains 4)
+        self.wm.add(chunk.cpu().numpy().squeeze(), importance=1.0)
+        
+        return chunk
+    
+    def retrieve_from_chunk(self, chunk_idx: int):
+        """Decompress chunk to original sequence"""
+        chunk_tensor = torch.from_numpy(
+            self.wm.slots[chunk_idx]
+        ).float().unsqueeze(0)
+        
+        # NEW: Reconstruct sequence
+        reconstructed = self.chunking.decode(chunk_tensor, seq_len=4)
+        
+        return reconstructed.cpu().numpy().squeeze()
+```
+
+**What This Does:**
+- ✅ NEW: Implements Miller's 7±2 capacity via chunking
+- ✅ 4 base slots × 4 items/chunk = 16 effective capacity
+- ✅ Trainable compression/decompression
+- ✅ Enables true capacity expansion
+
+---
+
+## 🗺️ Complete Integration Flow
+
+```python
+"""
+COMPLETE INTEGRATED SYSTEM
+File: src/fdqc_pytorch_integration.py
+"""
+
+import torch
+import torch.nn as nn
+import numpy as np
+from typing import Optional, List, Tuple, Dict
+
+# Import your existing components
+from fdqc_v4_demo_compact import (
+    WorkingMemory, 
+    AffectiveCore, 
+    CrisisDetector,
+    # ... other components
+)
+
+# Import new PyTorch components
+from fdqc_net_v3 import (
+    PretrainedGlobalEncoder,
+    ProjectionNetwork,
+    ConsciousWorkspace,
+    ImaginationEngine,
+    ChunkingAutoencoder,
+    ActionDecoder,
+    ActorCriticNetwork,
+    PPOTrainer
+)
+
+class FDQCv4_Integrated:
+    """
+    🎯 MASTER INTEGRATION CLASS
+    Bridges NumPy prototype with PyTorch production components
+    """
+    def __init__(self, config: FDQCConfig):
+        self.config = config
+        self.device = torch.device(config.device)
+        
+        # ===== PHASE 1: UPGRADED COMPONENTS =====
+        # These replace or enhance existing NumPy components
+        
+        self.global_encoder = PretrainedGlobalEncoder(config).to(self.device)
+        self.projection = ProjectionNetwork(config).to(self.device)
+        self.workspace = ConsciousWorkspace(config).to(self.device)
+        self.action_decoder = ActionDecoder(config).to(self.device)
+        
+        # ===== PHASE 2: NEW COMPONENTS =====
+        # These add capabilities you don't have
+        
+        self.imagination = ImaginationEngine(config).to(self.device)
+        self.chunking = ChunkingAutoencoder(config).to(self.device)
+        self.metacognitive = ActorCriticNetwork(config, PPOConfig()).to(self.device)
+        
+        # ===== PHASE 3: KEEP EXISTING COMPONENTS =====
+        # These work fine in NumPy
+        
+        self.affect = AffectiveCore()
+        self.crisis = CrisisDetector()
+        
+        # ===== STATE TRACKING =====
+        self.timestep = 0
+        self.current_capacity_idx = 0
+        self.current_global_repr = None
+        self.working_memory_state = []
+        
+    # ===== MAIN COGNITIVE CYCLE =====
+    def process(self,
+                text: Optional[str] = None,
+                image: Optional[np.ndarray] = None,
+                raw_vector: Optional[np.ndarray] = None) -> Dict:
+        """
+        🔄 COMPLETE COGNITIVE CYCLE
+        
+        This is your main entry point that connects everything
+        """
+        
+        # STEP 1: ENCODE INPUT (Connection Point 1)
+        if text is not None or image is not None:
+            global_repr = self._encode_multimodal(text, image)
+        else:
+            global_repr = torch.from_numpy(raw_vector).float()
+        
+        self.current_global_repr = global_repr
+        
+        # STEP 2: SELECT CAPACITY (Connection Point 3)
+        capacity_idx = self._select_capacity(global_repr)
+        n_capacity = self.config.n_wm_levels[capacity_idx]
+        
+        # STEP 3: PROJECT TO WORKSPACE (Connection Point 2)
+        conscious_state, importance = self.projection(
+            global_repr.unsqueeze(0),
+            n_capacity=n_capacity
+        )
+        
+        # STEP 4: WORKSPACE DYNAMICS
+        workspace_out = self.workspace(conscious_state, self.timestep)
+        
+        # STEP 5: IMAGINE FUTURE (Connection Point 5)
+        if self.should_plan():
+            imagined_trajectory = self._plan_ahead(workspace_out['state'])
+        
+        # STEP 6: CHUNKING (Connection Point 7)
+        if self.should_chunk():
+            self._compress_recent_patterns()
+        
+        # STEP 7: ACTION SELECTION
+        action_logits = self.action_decoder(
+            workspace_out['state'],
+            n_capacity=n_capacity
+        )
+        
+        # STEP 8: EXISTING COMPONENTS
+        # Your affective and crisis systems still work
+        self.crisis.detect(workspace_out['entropy'].item())
+        
+        self.timestep += 1
+        
+        return {
+            'action_logits': action_logits.cpu().detach().numpy(),
+            'entropy': workspace_out['entropy'].item(),
+            'energy': workspace_out['energy'].item(),
+            'capacity': n_capacity,
+            'collapsed': workspace_out['collapsed'].item()
+        }
+    
+    # ===== INTERNAL METHODS =====
+    def _encode_multimodal(self, text, image):
+        """Connection Point 1: Input encoding"""
+        with torch.no_grad():
+            text_ids = tokenize(text) if text else None
+            text_mask = create_mask(text) if text else None
+            image_tensor = preprocess_image(image) if image else None
+            
+            global_repr = self.global_encoder(
+                text_ids=text_ids,
+                text_mask=text_mask,
+                images=image_tensor
+            )
+        return global_repr.squeeze(0)
+    
+    def _select_capacity(self, global_repr):
+        """Connection Point 3: Metacognitive capacity selection"""
+        state = MetacognitiveState(
+            global_repr=global_repr,
+            task_difficulty=self.estimate_difficulty(),
+            recent_accuracy=self.compute_recent_accuracy(),
+            energy_budget=self.get_energy_budget(),
+            prev_capacity_idx=self.current_capacity_idx,
+            steps_at_capacity=self.get_steps_at_capacity(),
+            error_rate=self.crisis.errors[-10:].mean() if len(self.crisis.errors) > 0 else 0.0,
+            time_pressure=0.0
+        )
+        
+        state_tensor = state.to_tensor(self.device).unsqueeze(0)
+        
+        with torch.no_grad():
+            action_dict = self.metacognitive.get_action_and_value(state_tensor)
+        
+        return action_dict['action'].item()
+    
+    def _plan_ahead(self, current_state):
+        """Connection Point 5: Imagination-based planning"""
+        goal = self.get_current_goal()
+        
+        with torch.no_grad():
+            planned_actions = self.imagination.plan(
+                current_state=current_state,
+                goal_state=goal,
+                horizon=5
+            )
+        
+        return planned_actions
+    
+    def _compress_recent_patterns(self):
+        """Connection Point 7: Chunking compression"""
+        if len(self.working_memory_state) >= 4:
+            # Get last 4 states
+            recent = self.working_memory_state[-4:]
+            sequence = torch.stack([
+                torch.from_numpy(s) if isinstance(s, np.ndarray) else s
+                for s in recent
+            ]).unsqueeze(0)
+            
+            # Compress
+            chunk = self.chunking.encode(sequence)
+            
+            # Replace 4 items with 1 chunk
+            self.working_memory_state = self.working_memory_state[:-4]
+            self.working_memory_state.append(chunk)
+    
+    # ===== TRAINING INTERFACE =====
+    def train_phase1_supervised(self, train_loader, n_epochs=10):
+        """Phase 1 training: Supervised task learning"""
+        trainer = FDQCTrainer(self.config)
+        trainer.global_encoder = self.global_encoder
+        trainer.projection = self.projection
+        trainer.workspace = self.workspace
+        trainer.action_decoder = self.action_decoder
+        
+        trainer.phase1_supervised_training(train_loader, n_epochs)
+    
+    def train_phase2_imagination(self, experience_buffer, n_epochs=5):
+        """Phase 2 training: World model"""
+        trainer = FDQCTrainer(self.config)
+        trainer.imagination = self.imagination
+        
+        trainer.phase2_imagination_training(experience_buffer, n_epochs)
+    
+    def train_phase3_chunking(self, sequence_data, n_epochs=5):
+        """Phase 3 training: Chunking autoencoder"""
+        trainer = FDQCTrainer(self.config)
+        trainer.chunking = self.chunking
+        
+        trainer.phase3_chunking_training(sequence_data, n_epochs)
+    
+    def train_phase4_metacognitive(self, env, n_episodes=1000):
+        """Phase 4 training: PPO capacity selection"""
+        ppo_trainer = PPOTrainer(self.config, PPOConfig(), self.device)
+        ppo_trainer.network = self.metacognitive
+        
+        ppo_trainer.learn(env, total_timesteps=n_episodes*100)
+```
+
+---
+
+## 📋 Integration Checklist: What To Do NOW
+
+### **Week 1: Minimal Integration (Get It Running)**
+
+```bash
+# Create new file: src/fdqc_pytorch_integration.py
+# Copy the FDQCv4_Integrated class above
+
+# Modify your existing demo:
+# demos/fdqc_v4_demo_pytorch.py
+```
+
+```python
+# Week 1 Goal: Replace ONLY input encoding
+
+from fdqc_pytorch_integration import FDQCv4_Integrated
+
+# Initialize
+config = FDQCConfig()
+system = FDQCv4_Integrated(config)
+
+# Your existing test
+for episode in range(100):
+    # OLD: item = np.random.randn(60)
+    # NEW: Accept text/images
+    text = "Remember these items: A, B, C, D"
+    
+    output = system.process(text=text)
+    
+    print(f"Episode {episode}: Capacity={output['capacity']}, "
+          f"Entropy={output['entropy']:.3f}")
+```
+
+**Verify:**
+- ✅ System runs without errors
+- ✅ Text input works
+- ✅ Outputs match your existing format
+
+---
+
+### **Week 2: Add Capacity Selection**
+
+```python
+# Enable metacognitive controller
+system.metacognitive.eval()  # Start in eval mode
+
+# Run episodes
+for episode in range(100):
+    output = system.process(text="Task with varying difficulty")
+    
+    # System now automatically selects from {4, 6, 9, 12}
+    print(f"Selected capacity: {output['capacity']}")
+```
+
+**Verify:**
+- ✅ Capacity varies based on task
+- ✅ Energy-accuracy tradeoff visible
+- ✅ Statistics show distribution
+
+---
+
+### **Week 3: Add Training**
+
+```python
+# Prepare data
+train_loader, val_loader = create_phase1_dataloaders(
+    task_type='working_memory',
+    batch_size=32
+)
+
+# Train Phase 1: Supervised
+system.train_phase1_supervised(train_loader, n_epochs=10)
+
+# Save
+torch.save(system.state_dict(), 'fdqc_trained.pth')
+```
+
+**Verify:**
+- ✅ Training loss decreases
+- ✅ Validation accuracy improves
+- ✅ Model saves/loads correctly
+
+---
+
+### **Week 4: Full Integration**
+
+Enable all components:
+- ✅ Imagination engine
+- ✅ Chunking autoencoder
+- ✅ PPO metacognitive training
+- ✅ Visualization
+
+---
+
+## 🎯 Quick Start Script
+
+```python
+"""
+MINIMAL INTEGRATION TEST
+Run this to verify everything connects
+"""
+
+import torch
+import numpy as np
+from src.fdqc_pytorch_integration import FDQCv4_Integrated, FDQCConfig
+
+def test_integration():
+    print("=" * 60)
+    print("FDQC v4.0 → PyTorch Integration Test")
+    print("=" * 60)
+    
+    # Initialize
+    config = FDQCConfig()
+    system = FDQCv4_Integrated(config)
+    
+    # Test 1: Raw vector input (backward compatible)
+    print("\nTest 1: Raw vector input")
+    raw_input = np.random.randn(60)
+    output = system.process(raw_vector=raw_input)
+    print(f"✓ Output: capacity={output['capacity']}, entropy={output['entropy']:.3f}")
+    
+    # Test 2: Text input (new capability)
+    print("\nTest 2: Text input")
+    text_input = "Remember: A, B, C, D"
+    output = system.process(text=text_input)
+    print(f"✓ Output: capacity={output['capacity']}, entropy={output['entropy']:.3f}")
+    
+    # Test 3: Capacity selection
+    print("\nTest 3: Capacity selection")
+    for difficulty in [0.1, 0.5, 0.9]:
+        output = system.process(
+            text=f"Task difficulty: {difficulty}",
+            # Simulate task difficulty
+        )
+        print(f"  Difficulty {difficulty:.1f} → capacity={output['capacity']}")
+    
+    # Test 4: Save/Load
+    print("\nTest 4: Save/Load")
+    torch.save(system.state_dict(), 'test_model.pth')
+    print("✓ Model saved")
+    
+    system_loaded = FDQCv4_Integrated(config)
+    system_loaded.load_state_dict(torch.load('test_model.pth'))
+    print("✓ Model loaded")
+    
+    print("\n" + "=" * 60)
+    print("✅ ALL INTEGRATION TESTS PASSED")
+    print("=" * 60)
+
+if __name__ == '__main__':
+    test_integration()
+```
+
+---
+
+## 🚨 Common Issues & Solutions
+
+### Issue 1: "Module not found"
+**Solution:** Create proper directory structure:
+```
+your_project/
+├── src/
+│   ├── fdqc_net_v3.py          # Components I provided
+│   ├── fdqc_pytorch_integration.py  # Integration layer
+│   └── data_preparation.py      # Data pipelines
+├── demos/
+│   └── fdqc_v4_demo_compact.py  # Your existing code
+└── tests/
+    └── test_integration.py      # Test script above
+```
+
+### Issue 2: "Tensor/NumPy mismatch"
+**Solution:** Use conversion helpers:
+```python
+def to_torch(x):
+    if isinstance(x, np.ndarray):
+        return torch.from_numpy(x).float()
+    return x
+
+def to_numpy(x):
+    if isinstance(x, torch.Tensor):
+        return x.cpu().detach().numpy()
+    return x
+```
+
+### Issue 3: "CUDA out of memory"
+**Solution:** Use CPU mode initially:
+```python
+config = FDQCConfig(device='cpu')
+```
+
+---
+
+## 🎯 Summary: Your Action Plan
+
+**THIS WEEK:**
+1. Copy `FDQCv4_Integrated` class to `src/fdqc_pytorch_integration.py`
+2. Run minimal integration test script above
+3. Verify backward compatibility with your existing NumPy code
+
+**NEXT WEEK:**
+1. Replace input encoding in your demo
+2. Test with text/image inputs
+3. Verify outputs match
+
+**MONTH 1:**
+- Full component integration
+- Phase 1 supervised training
+- Baseline performance metrics
+
+**MONTH 2-3:**
+- PPO metacognitive training
+- Imagination + chunking training
+- Production optimization
+
+---
+
+**Which specific component would you like me to help you integrate FIRST?** 
+
+Let me know and I'll provide a detailed, step-by-step walkthrough with exact code for that component! 🚀

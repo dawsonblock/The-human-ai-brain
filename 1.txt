@@ -1,0 +1,646 @@
+
+# arXiv Submission Troubleshooting Guide
+
+## Common Issues and Solutions for FDQC v3.1 Submission
+
+-----
+
+## Issue 1: LaTeX Compilation Fails
+
+### Symptoms
+
+- arXiv shows “Processing failed”
+- Error log mentions missing files or packages
+- PDF preview doesn’t generate
+
+### Solutions
+
+#### A. Missing Figure Files
+
+**Error message:** `File 'Figure1_TwoLevel_Architecture.pdf' not found`
+
+**Solution:**
+
+```latex
+% Check your \includegraphics commands
+% CORRECT:
+\includegraphics[width=0.8\textwidth]{Figure1_TwoLevel_Architecture}
+
+% INCORRECT (don't include .pdf extension on arXiv):
+\includegraphics[width=0.8\textwidth]{Figure1_TwoLevel_Architecture.pdf}
+```
+
+Ensure all figure files are uploaded to arXiv submission.
+
+#### B. Package Not Available
+
+**Error message:** `! LaTeX Error: File 'obscurepackage.sty' not found`
+
+**Solution:**
+
+- arXiv uses standard TeXLive distribution
+- Check if package is standard (most are)
+- If custom package needed, upload it with your submission
+- Alternatively, rewrite to use standard packages
+
+**Common safe packages:**
+
+```latex
+\usepackage{amsmath, amssymb}  % Math symbols ✅
+\usepackage{graphicx}          % Figures ✅
+\usepackage{natbib}            % Citations ✅
+\usepackage{hyperref}          % Links ✅
+\usepackage{tikz}              % Diagrams ✅
+\usepackage{booktabs}          % Tables ✅
+```
+
+#### C. Bibliography Issues
+
+**Error message:** `Citation 'cowan2001magical' undefined`
+
+**Solution:**
+
+1. Ensure `fdqc_references.bib` is uploaded
+1. Check bibliography command:
+
+```latex
+% At end of document:
+\bibliography{fdqc_references}  % No .bib extension
+\bibliographystyle{plain}       % Or your preferred style
+```
+
+1. Verify all \cite{} keys match entries in .bib file
+
+-----
+
+## Issue 2: Figures Don’t Appear in PDF
+
+### Symptoms
+
+- Compilation succeeds
+- But figures are blank or missing
+- Or “Figure X not found” in text
+
+### Solutions
+
+#### A. Check Figure Paths
+
+```latex
+% CORRECT (figures in same directory):
+\includegraphics{Figure1_TwoLevel_Architecture}
+
+% INCORRECT (absolute paths don't work on arXiv):
+\includegraphics{/home/user/figures/Figure1_TwoLevel_Architecture}
+
+% INCORRECT (relative paths may fail):
+\includegraphics{./figures/Figure1_TwoLevel_Architecture}
+```
+
+**Fix:** Place all figures in root directory with .tex files, use simple names.
+
+#### B. Verify Figure Format
+
+- arXiv prefers PDF figures
+- PNG, JPG also work but PDF is best for vector graphics
+- Ensure figures are not corrupt (open locally first)
+
+#### C. Check File Names
+
+- File names are case-sensitive on arXiv
+- `Figure1.pdf` ≠ `figure1.pdf`
+- Verify exact match between file name and \includegraphics{} command
+
+-----
+
+## Issue 3: Submission Requires Endorsement
+
+### Symptoms
+
+- “Your submission requires endorsement” message
+- Can’t proceed without approval
+
+### Background
+
+New arXiv submitters in some categories need an established user to endorse them.
+
+### Solutions
+
+#### A. Request Endorsement from Advisor/Colleague
+
+1. Contact someone who has published on arXiv in `q-bio.NC` or `physics.bio-ph`
+1. Provide your submission ID (they’ll receive it in email)
+1. They go to: https://arxiv.org/auth/endorse
+1. Enter your submission ID and endorse
+1. You can then proceed
+
+#### B. Use Institutional Email
+
+If you have .edu, .ac.uk, or other academic institution email:
+
+- This usually bypasses endorsement requirement
+- Make sure you’re logged in with that email
+
+#### C. Be Patient
+
+- First-time submissions may take 1-2 business days
+- arXiv moderators review to prevent spam
+- High-quality submissions are usually approved
+
+-----
+
+## Issue 4: Compilation Takes Very Long
+
+### Symptoms
+
+- “Processing” message for 10+ minutes
+- No progress indication
+
+### Solutions
+
+#### A. Check File Size
+
+- Total submission should be < 10 MB ideally
+- Large figure files slow processing
+- Optimize PDFs if needed:
+
+```bash
+# Compress PDF figures (if too large)
+gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/ebook \
+   -dNOPAUSE -dQUIET -dBATCH \
+   -sOutputFile=Figure1_compressed.pdf Figure1.pdf
+```
+
+#### B. Simplify TikZ Diagrams
+
+If you have complex TikZ code:
+
+- Pre-compile to PDF separately
+- Include as figure rather than inline code
+
+#### C. Wait Patiently
+
+- First compilation may take 5-10 minutes
+- arXiv processes many submissions
+- If > 15 minutes, refresh page
+
+-----
+
+## Issue 5: Preview PDF Looks Wrong
+
+### Symptoms
+
+- Formatting is off
+- Equations don’t render properly
+- Page breaks in wrong places
+
+### Solutions
+
+#### A. Check Document Class
+
+```latex
+% arXiv works well with standard classes:
+\documentclass[11pt]{article}  ✅
+\documentclass[12pt]{report}   ✅
+
+% Some journal classes may cause issues:
+\documentclass{plos2015}       ⚠️ (may need adjustment)
+```
+
+**Recommendation:** Use standard `article` class for arXiv.
+
+#### B. Verify Equation Formatting
+
+```latex
+% CORRECT:
+\begin{equation}
+  n^* = \frac{2E}{\beta} \cdot \frac{1}{W\left(\frac{2E}{\beta e}\right)}
+\end{equation}
+
+% Check all $ $ and \[ \] match
+```
+
+#### C. Test Locally First
+
+Before submitting to arXiv:
+
+```bash
+pdflatex your_manuscript.tex
+bibtex your_manuscript
+pdflatex your_manuscript.tex
+pdflatex your_manuscript.tex
+
+# Open PDF and verify formatting
+```
+
+-----
+
+## Issue 6: “File Already Exists” Error
+
+### Symptoms
+
+- Can’t upload file
+- Error: “A file with this name already exists”
+
+### Solution
+
+- Delete previous version before uploading new one
+- Or use “replace all files” option
+- Or rename file slightly
+
+-----
+
+## Issue 7: Submission Stuck in “Processing”
+
+### Symptoms
+
+- Status shows “processing” for hours/days
+- No error message
+- Can’t proceed
+
+### Solutions
+
+#### A. New Submitter Review
+
+- First submissions often require manual review
+- Normal processing: 1-2 business days
+- Be patient
+
+#### B. Contact arXiv Support
+
+If stuck > 2 business days:
+
+```
+Email: help@arxiv.org
+Subject: Submission stuck in processing - [Your Submission ID]
+
+Body:
+I submitted [submission ID] on [date] and it has been stuck in 
+"processing" status for [X days]. The submission includes [brief 
+description]. Could you please check the status?
+
+Thank you,
+[Your name]
+[Your institutional email]
+```
+
+-----
+
+## Issue 8: Abstract Too Long
+
+### Symptoms
+
+- “Abstract exceeds 1920 characters” error
+
+### Solution
+
+Our provided abstract is 1,850 chars - within limit. But if you modify:
+
+**Compression strategies:**
+
+1. Remove redundant phrases
+1. Use abbreviations (WM instead of “working memory” after first use)
+1. Combine sentences
+1. Remove qualifiers (“very”, “extremely”, etc.)
+1. Focus on core result
+
+**Do NOT:**
+
+- Remove key findings
+- Sacrifice clarity for brevity
+- Use unclear abbreviations
+
+-----
+
+## Issue 9: Wrong Category Selected
+
+### Symptoms
+
+- Realize after submission you picked wrong primary category
+- Want to change q-bio.NC to physics.bio-ph (or vice versa)
+
+### Solution
+
+#### Before Announcement:
+
+- Contact arXiv support immediately
+- They can change category before announcement
+
+#### After Announcement:
+
+- Can’t change primary category
+- Can add cross-list categories
+- Or submit as new version (but loses original submission date)
+
+**Prevention:** Double-check category before final submit.
+
+-----
+
+## Issue 10: Need to Make Changes After Submission
+
+### Symptoms
+
+- Spotted typo/error after submitting
+- Want to add missing figure
+- Need to update text
+
+### Solution
+
+#### Before Announcement:
+
+1. Login to arXiv
+1. Go to your submission
+1. Click “unsubmit” (if still in processing)
+1. Make changes
+1. Re-submit
+
+#### After Announcement:
+
+1. Can’t undo announcement
+1. But can submit replacement version:
+- Login → “replace” for your paper
+- Upload new files
+- Add version note describing changes
+- New version gets …v2 identifier
+
+**Version notes example:**
+
+```
+v1: Initial submission
+v2: Fixed typo in equation 3, clarified figure 2 caption
+```
+
+-----
+
+## Issue 11: Supplementary Materials Not Visible
+
+### Symptoms
+
+- Main manuscript shows up
+- But supplements don’t appear
+- Or they’re merged into main PDF
+
+### Solution
+
+#### Check File Names:
+
+```
+✅ CORRECT:
+FDQC_v3.1_Complete_Manuscript.tex (main)
+FDQC_v3.1_Supplementary_Material_S1.tex (supplement)
+
+⚠️ UNCLEAR:
+main.tex
+supplement.tex
+```
+
+#### Ensure Separate Compilation:
+
+Each supplement should be a standalone .tex file with:
+
+```latex
+\documentclass{article}
+\begin{document}
+% supplement content
+\end{document}
+```
+
+#### Check arXiv Processing:
+
+- arXiv compiles all .tex files separately
+- They appear as separate PDFs on abstract page
+- If you want them merged, create single .tex file
+
+-----
+
+## Issue 12: Bibliography Not Formatting Correctly
+
+### Symptoms
+
+- References appear as [?]
+- Or formatting is wrong
+- Or some references missing
+
+### Solutions
+
+#### A. Verify BibTeX Process
+
+arXiv runs:
+
+```
+latex → bibtex → latex → latex
+```
+
+Ensure your .bib file is properly formatted:
+
+```bibtex
+@article{cowan2001magical,
+  author = {Cowan, Nelson},
+  title = {The magical number 4 in short-term memory},
+  journal = {Behavioral and Brain Sciences},
+  volume = {24},
+  number = {1},
+  pages = {87--114},
+  year = {2001}
+}
+```
+
+#### B. Check Citation Commands
+
+```latex
+% CORRECT:
+\cite{cowan2001magical}
+\citep{cowan2001magical}  % natbib
+\citet{cowan2001magical}  % natbib
+
+% INCORRECT:
+\cite[cowan2001magical]   % wrong bracket
+\ref{cowan2001magical}    % that's for \label, not citations
+```
+
+#### C. Bibliography Style
+
+```latex
+% Standard styles that work on arXiv:
+\bibliographystyle{plain}     ✅
+\bibliographystyle{unsrt}     ✅
+\bibliographystyle{alpha}     ✅
+\bibliographystyle{abbrv}     ✅
+\bibliographystyle{naturemag} ⚠️ (may need .bst file)
+```
+
+-----
+
+## Issue 13: Special Characters Don’t Display
+
+### Symptoms
+
+- Greek letters show as boxes
+- Math symbols broken
+- Accented characters wrong
+
+### Solution
+
+#### A. Use Math Mode for Symbols
+
+```latex
+% CORRECT:
+$\beta$, $\pi$, $\Phi$
+
+% INCORRECT (in text mode):
+β, π, Φ  % May not work on arXiv
+```
+
+#### B. UTF-8 Encoding
+
+Add to preamble:
+
+```latex
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+```
+
+#### C. Special Math Symbols
+
+```latex
+\usepackage{amssymb}  % For extended symbols
+\usepackage{amsmath}  % For math environments
+```
+
+-----
+
+## Emergency Contact Information
+
+### arXiv Help Desk
+
+**Email:** help@arxiv.org  
+**Response Time:** 1-2 business days  
+**Hours:** Monday-Friday (US Eastern Time)
+
+### What to Include in Help Request:
+
+1. Your submission ID (arXiv:YYMM.NNNNN)
+1. Specific error message (copy-paste from log)
+1. What you’ve tried already
+1. Institutional affiliation
+1. Brief description of paper topic
+
+### Example Help Request:
+
+```
+Subject: Compilation error - submission 2412.12345
+
+Dear arXiv support,
+
+I'm having trouble with submission arXiv:2412.12345 (FDQC v3.1 manuscript). 
+
+Error: "Figure1_TwoLevel_Architecture.pdf not found"
+
+I have verified:
+- File is uploaded (visible in file list)
+- Filename matches \includegraphics{Figure1_TwoLevel_Architecture} command
+- File opens correctly locally
+
+Could you please advise?
+
+Thank you,
+[Your name]
+[Institution]
+[Email]
+```
+
+-----
+
+## Prevention Checklist
+
+### Before Submitting to arXiv:
+
+#### Local Testing (Critical):
+
+- [ ] Compile manuscript locally 3+ times
+- [ ] Check all figures appear
+- [ ] Verify all citations resolve
+- [ ] Open final PDF and review thoroughly
+- [ ] Test on fresh LaTeX installation if possible
+
+#### File Verification:
+
+- [ ] All .tex files present
+- [ ] .bib file present
+- [ ] All figure PDFs present
+- [ ] File names match \includegraphics{} commands exactly
+- [ ] No absolute paths in code
+- [ ] All figures open correctly
+
+#### Metadata Preparation:
+
+- [ ] Title finalized
+- [ ] Abstract within 1920 char limit
+- [ ] Author info complete
+- [ ] Category selected correctly
+- [ ] Comments field prepared
+
+#### Content Review:
+
+- [ ] No sensitive/identifying information if anonymous review needed
+- [ ] Acknowledgments appropriate
+- [ ] Funding statements correct
+- [ ] All coauthors aware and approving
+
+-----
+
+## Success Indicators
+
+### Your Submission is Good If:
+
+✅ Local compilation produces clean PDF  
+✅ All figures appear correctly  
+✅ All references resolve  
+✅ No LaTeX warnings  
+✅ File size < 10 MB  
+✅ Standard packages only  
+✅ Institutional email used
+
+### Then arXiv Submission Should Be Smooth!
+
+-----
+
+## Timeline Expectations
+
+### Normal Processing:
+
+- **Upload to processing:** < 5 minutes
+- **Compilation:** 5-15 minutes
+- **Moderation (first-time):** 1-2 business days
+- **Announcement:** Next business day 20:00 UTC
+
+### If Delays Occur:
+
+- Be patient for first 2 business days
+- Check status periodically
+- After 2 days, contact help@arxiv.org
+- Usually resolved within 3-4 business days total
+
+-----
+
+## Final Advice
+
+### The Golden Rules:
+
+1. **Test locally first** (this prevents 90% of issues)
+1. **Use standard packages** (avoid exotic LaTeX)
+1. **Keep it simple** (fewer dependencies = fewer problems)
+1. **Be patient** (first submissions take longer)
+1. **Contact support early** (if stuck > 2 days)
+
+### You’ve Got This!
+
+Your FDQC v3.1 manuscript is well-prepared. The LaTeX is clean, figures are ready, and content is solid. Minor issues can be easily fixed.
+
+**Most likely outcome: Smooth submission, quick processing, successful announcement** 🎉
+
+-----
+
+**If you encounter any issues not covered here, contact arXiv support or reach back out for additional help!**
+
+—————
+

@@ -541,39 +541,43 @@ static DiffResult myers_diff_lines(const std::vector<std::string>& old_lines, co
             res.changes.push_back({' ', old_lines[i]});
             i++; j++;
         } else {
-            // Heuristically find next match (this is where real algorithm is needed)
+            // Heuristic next-match search (placeholder)
             size_t next_i = i + 1, next_j = j + 1;
-            while(next_i < old_lines.size() && old_lines[next_i] != new_lines[j]) next_i++;
-            while(next_j < new_lines.size() && old_lines[i] != new_lines[next_j]) next_j++;
-
-            if (next_i - i < next_j - j) {
+            while (next_i < old_lines.size() && old_lines[next_i] != new_lines[j]) next_i++;
+            while (next_j < new_lines.size() && old_lines[i] != new_lines[next_j]) next_j++;
+            if ((next_i - i) < (next_j - j)) {
                 res.changes.push_back({'-', old_lines[i++]});
             } else {
                 res.changes.push_back({'+', new_lines[j++]});
             }
-        static std::string unified_diff(const std::string &old_str, const std::string &new_str, const std::string &path) {
-            // Fallback: if proper diff not implemented, emit full replace hunk
-            std::stringstream diff;
-            diff << "--- a/" << path << "\n";
-            diff << "+++ b/" << path << "\n";
-            // Single hunk covering entire files
-            size_t old_lines = split_lines(old_str).size();
-            size_t new_lines = split_lines(new_str).size();
-            diff << "@@ -" << (old_lines ? 1 : 0) << "," << old_lines
-                 << " +" << (new_lines ? 1 : 0) << "," << new_lines << " @@\n";
-            // Emit deletions then additions to avoid ambiguity
-            for (const auto &line : split_lines(old_str)) {
-                diff << "-" << line << "\n";
-            }
-            for (const auto &line : split_lines(new_str)) {
-                diff << "+" << line << "\n";
-            }
-    // This part would need to generate hunk headers (e.g., @@ -1,5 +1,5 @@)
-    // For simplicity, we just print the changed lines.
-    for (const auto& change : result.changes) {
-        if (change.first != ' ') {
-            diff << change.first << change.second << "\n";
         }
+    }
+    // Drain any remaining lines
+    while (i < old_lines.size()) {
+        res.changes.push_back({'-', old_lines[i++]});
+    }
+    while (j < new_lines.size()) {
+        res.changes.push_back({'+', new_lines[j++]});
+    }
+    return res;
+}
+
+static std::string unified_diff(const std::string &old_str, const std::string &new_str, const std::string &path) {
+    // Fallback: emit a single full-replace hunk to ensure a valid, parseable diff
+    std::stringstream diff;
+    diff << "--- a/" << path << "\n";
+    diff << "+++ b/" << path << "\n";
+    const auto old_lines_vec = split_lines(old_str);
+    const auto new_lines_vec = split_lines(new_str);
+    const size_t old_count = old_lines_vec.size();
+    const size_t new_count = new_lines_vec.size();
+    diff << "@@ -" << (old_count ? 1 : 0) << "," << old_count
+         << " +" << (new_count ? 1 : 0) << "," << new_count << " @@\n";
+    for (const auto &line : old_lines_vec) {
+        diff << "-" << line << "\n";
+    }
+    for (const auto &line : new_lines_vec) {
+        diff << "+" << line << "\n";
     }
     return diff.str();
 }

@@ -73,6 +73,9 @@ void SyntheticDataset::generate_xor(size_t n) {
 }
 
 void SyntheticDataset::generate_circle(size_t n, int dim) {
+    if (dim < 2) {
+        throw std::invalid_argument("generate_circle requires dim >= 2");
+    }
     std::uniform_real_distribution<Scalar> angle_dist(0.0, 2.0 * M_PI);
     std::uniform_real_distribution<Scalar> radius_dist(0.0, 1.0);
     std::normal_distribution<Scalar> noise(0.0, 0.05);

@@ -4,6 +4,10 @@ metadata:
   name: brain-server-hpa
   labels:
     app: brain-fdqc
+  annotations:
+    # Ensure Deployment sets CPU/memory requests; HPA Utilization is relative to requests.
+    # If requests are absent, consider switching to AverageValue targets.
+    autoscaling.alpha.kubernetes.io/conditions: ""
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

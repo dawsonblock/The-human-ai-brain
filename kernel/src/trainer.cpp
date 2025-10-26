@@ -62,6 +62,14 @@ void BrainTrainer::train(Dataset& dataset) {
 }
 
 void BrainTrainer::train_epoch(Dataset& dataset, size_t epoch) {
+    if (dataset.size() == 0) {
+        if (config_.verbose) {
+            std::cout << "Epoch " << (epoch + 1) << "/" << config_.num_epochs
+                      << " - Skipped (empty dataset)\n";
+        }
+        return;
+    }
+
     if (config_.shuffle) {
         dataset.shuffle();
     }
@@ -75,13 +83,15 @@ void BrainTrainer::train_epoch(Dataset& dataset, size_t epoch) {
         TrainingBatch batch;
         batch.batch_id = batch_id;
         batch.epoch = epoch;
-        
-        // Collect samples for batch
-        size_t start_idx = batch_id * config_.batch_size;
-        size_t end_idx = std::min(start_idx + config_.batch_size, dataset.size());
-        
+
+        const size_t start_idx = batch_id * config_.batch_size;
+        const size_t end_idx = std::min(start_idx + config_.batch_size, dataset.size());
         for (size_t i = start_idx; i < end_idx; ++i) {
             batch.samples.push_back(dataset.get(i));
+        }
+
+        if (batch.samples.empty()) {
+            continue;
         }
         
         // Train on batch
@@ -102,12 +112,20 @@ void BrainTrainer::train_epoch(Dataset& dataset, size_t epoch) {
                       << "\r" << std::flush;
         }
         
-        // Batch callback
         if (batch_callback_) {
             batch_callback_(batch_id, batch, metrics_);
         }
     }
     
+    if (samples_in_epoch == 0) {
+        // No samples processed; avoid division by zero.
+        if (config_.verbose) {
+            std::cout << "Epoch " << (epoch + 1) << "/" << config_.num_epochs
+                      << " - No samples processed\n";
+        }
+        return;
+    }
+
     // Store epoch metrics
     epoch_loss /= samples_in_epoch;
     epoch_accuracy /= samples_in_epoch;

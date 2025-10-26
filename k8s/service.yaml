@@ -8,6 +8,9 @@ metadata:
 spec:
   type: LoadBalancer
   externalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
   ports:
   - name: grpc
     port: 50051

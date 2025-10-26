@@ -329,7 +329,12 @@ static void write_atomic(const std::string &path, const std::string &content) {
             // Flush the directory to ensure the rename is durable
             int dfd = ::open(dir.c_str(), O_DIRECTORY | O_RDONLY);
             if (dfd >= 0) {
-    }
+                if (::fsync(dfd) != 0) {
+                    ::close(dfd);
+                    throw std::runtime_error("fsync on directory failed: " + dir.string());
+                }
+                ::close(dfd);
+            }
     std::filesystem::create_directories(snap_dir);
     // Build snapshot name: <filename>.<pid>.bak
     std::string base = src.filename().string();

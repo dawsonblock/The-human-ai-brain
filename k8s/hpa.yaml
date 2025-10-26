@@ -4,39 +4,35 @@ metadata:
   name: brain-server-hpa
   labels:
     app: brain-fdqc
-  metadata:
-    name: brain-server-hpa
-    labels:
-      app: brain-fdqc
-  spec:
-    scaleTargetRef:
-      apiVersion: apps/v1
-      kind: Deployment
-      name: brain-server
-    minReplicas: 2
-    maxReplicas: 10
-    metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
-          averageUtilization: 80
-    behavior:
-      scaleDown:
-        stabilizationWindowSeconds: 60
-        policies:
-        - type: Percent
-          value: 50
-          periodSeconds: 60
-        selectPolicy: Min
-      scaleUp:
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: brain-server
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
       stabilizationWindowSeconds: 30
       policies:
       - type: Percent

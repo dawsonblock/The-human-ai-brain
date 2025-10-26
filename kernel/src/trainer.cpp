@@ -418,6 +418,7 @@ void BrainTrainer::update_parameters(const std::vector<Eigen::VectorXd>& gradien
     }
 }
 
+// Remove the malformed duplicate checkpoint code above.
 void BrainTrainer::load_checkpoint(const std::string& path) {
     std::ifstream file(path, std::ios::binary);
     if (!file) {

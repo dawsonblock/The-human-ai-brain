@@ -56,15 +56,18 @@ std::vector<double> CollapseLoop::softmax(const std::vector<double>& logits,
         return {};
     }
     
+    // Guard against zero/negative temperature
+    double temp = std::max(temperature, fdqc_params::MIN_TEMPERATURE); // define MIN_TEMPERATURE > 0 in params
+    
     // Compute max for numerical stability
     double max_logit = *std::max_element(logits.begin(), logits.end());
     
-    // Compute exp((logit - max) / temperature)
+    // Compute exp((logit - max) / temp)
     std::vector<double> exp_values(logits.size());
     double sum = 0.0;
     
     for (size_t i = 0; i < logits.size(); ++i) {
-        exp_values[i] = std::exp((logits[i] - max_logit) / temperature);
+        exp_values[i] = std::exp((logits[i] - max_logit) / temp);
         sum += exp_values[i];
     }
     

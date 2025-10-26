@@ -104,12 +104,16 @@ void BrainTrainer::train_epoch(Dataset& dataset, size_t epoch) {
         
         // Logging
         if (config_.verbose && (batch_id + 1) % config_.log_interval == 0) {
-            std::cout << "Epoch " << (epoch + 1) << "/" << config_.num_epochs 
-                      << " - Batch " << (batch_id + 1) << "/" << num_batches
-                      << " - Loss: " << std::fixed << std::setprecision(4) << metrics_.loss
-                      << " - Acc: " << std::fixed << std::setprecision(2) << (metrics_.accuracy * 100.0) << "%"
-                      << " - LR: " << std::scientific << std::setprecision(2) << get_current_learning_rate()
-                      << "\r" << std::flush;
+            auto& os = std::cout;
+            std::ios old_state(nullptr);
+            old_state.copyfmt(os);
+            os << "Epoch " << (epoch + 1) << "/" << config_.num_epochs 
+               << " - Batch " << (batch_id + 1) << "/" << num_batches
+               << " - Loss: " << std::fixed << std::setprecision(4) << metrics_.loss
+               << " - Acc: " << std::fixed << std::setprecision(2) << (metrics_.accuracy * 100.0) << "%"
+               << " - LR: " << std::scientific << std::setprecision(2) << get_current_learning_rate()
+               << "\r" << std::flush;
+            os.copyfmt(old_state); // restore original formatting
         }
         
         if (batch_callback_) {

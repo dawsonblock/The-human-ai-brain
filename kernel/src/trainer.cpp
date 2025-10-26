@@ -214,10 +214,10 @@ Scalar BrainTrainer::compute_accuracy(const TrainingSample& sample, const Cognit
         return 0.0;
     }
     
-    // Find predicted class (argmax of global state - first 10 dims)
+    // Find predicted class (argmax of global state - first 10 dims or available size)
     int predicted_class = 0;
     Scalar max_val = result.h_global(0);
-    int search_dims = std::min(10, static_cast<int>(result.h_global.size()));
+    const int search_dims = std::min(10, static_cast<int>(result.h_global.size()));
     for (int i = 1; i < search_dims; ++i) {
         if (result.h_global(i) > max_val) {
             max_val = result.h_global(i);
@@ -230,6 +230,9 @@ Scalar BrainTrainer::compute_accuracy(const TrainingSample& sample, const Cognit
     try {
         true_class = std::stoi(sample.label);
     } catch (const std::exception&) {
+        return 0.0;
+    }
+    if (true_class < 0 || true_class >= search_dims) {
         return 0.0;
     }
     return (predicted_class == true_class) ? 1.0 : 0.0;

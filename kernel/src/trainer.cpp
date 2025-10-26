@@ -408,14 +408,32 @@ void BrainTrainer::load_checkpoint(const std::string& path) {
         std::cerr << "Failed to load checkpoint: " << path << std::endl;
         return;
     }
-    
-    size_t epoch;
+
+    size_t epoch = 0;
     file.read(reinterpret_cast<char*>(&epoch), sizeof(epoch));
+    if (file.gcount() != static_cast<std::streamsize>(sizeof(epoch))) {
+        std::cerr << "Corrupt checkpoint (epoch) in: " << path << std::endl;
+        return;
+    }
+
     file.read(reinterpret_cast<char*>(&metrics_.loss), sizeof(metrics_.loss));
+    if (file.gcount() != static_cast<std::streamsize>(sizeof(metrics_.loss))) {
+        std::cerr << "Corrupt checkpoint (loss) in: " << path << std::endl;
+        return;
+    }
+
     file.read(reinterpret_cast<char*>(&metrics_.accuracy), sizeof(metrics_.accuracy));
-    
+    if (file.gcount() != static_cast<std::streamsize>(sizeof(metrics_.accuracy))) {
+        std::cerr << "Corrupt checkpoint (accuracy) in: " << path << std::endl;
+        return;
+    }
+
+    if (!file.good() && !file.eof()) {
+        std::cerr << "Error reading checkpoint: " << path << std::endl;
+        return;
+    }
     file.close();
-    
+
     if (config_.verbose) {
         std::cout << "✓ Checkpoint loaded: " << path << " (epoch " << epoch << ")" << std::endl;
     }

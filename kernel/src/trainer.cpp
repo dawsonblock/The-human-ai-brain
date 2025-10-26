@@ -379,10 +379,11 @@ void BrainTrainer::apply_learning_rate_schedule(size_t epoch) {
                 return;
             }
 
-            file.read(reinterpret_cast<char*>(&metrics_.loss), sizeof(metrics_.loss));
-            if (file.gcount() != static_cast<std::streamsize>(sizeof(metrics_.loss))) {
-                std::cerr << "Corrupt checkpoint (loss) in: " << path << std::endl;
-                return;
+                file.close();
+
+                if (config_.verbose) {
+                    std::cout << "✓ Checkpoint loaded: " << path << " (epoch " << epoch << ")" << std::endl;
+                }
             }
 
             file.read(reinterpret_cast<char*>(&metrics_.accuracy), sizeof(metrics_.accuracy));

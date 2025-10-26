@@ -393,10 +393,11 @@ static std::string compute_sha256(const std::string &input) {
 // Returns a hex string.  If HMAC fails a std::runtime_error is
 // thrown.
 static std::string compute_hmac_sha256(const std::string &data, const std::string &key) {
+    if (key.empty()) {
+        throw std::runtime_error("HMAC key must not be empty");
+    }
     unsigned char result[EVP_MAX_MD_SIZE];
     unsigned int result_len = 0;
-    // Use HMAC from OpenSSL.  The key and data may be empty; OpenSSL
-    // handles empty inputs.
     unsigned char *res = HMAC(EVP_sha256(),
                               reinterpret_cast<const unsigned char *>(key.data()),
                               static_cast<int>(key.size()),

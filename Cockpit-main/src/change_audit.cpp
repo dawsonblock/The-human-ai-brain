@@ -568,7 +568,6 @@ static DiffResult myers_diff_lines(const std::vector<std::string>& old_lines, co
 }
 
 static std::string unified_diff(const std::string &old_str, const std::string &new_str, const std::string &path) {
-    // Fallback: emit a single full-replace hunk to ensure a valid, parseable diff
     std::stringstream diff;
     diff << "--- a/" << path << "\n";
     diff << "+++ b/" << path << "\n";
@@ -576,8 +575,15 @@ static std::string unified_diff(const std::string &old_str, const std::string &n
     const auto new_lines_vec = split_lines(new_str);
     const size_t old_count = old_lines_vec.size();
     const size_t new_count = new_lines_vec.size();
-    diff << "@@ -" << (old_count ? 1 : 0) << "," << old_count
-         << " +" << (new_count ? 1 : 0) << "," << new_count << " @@\n";
+    // If both are empty, return headers only (no hunk)
+    if (old_count == 0 && new_count == 0) {
+        return diff.str();
+    }
+    // Unified diff hunk header uses 1-based line numbers for non-empty files.
+    const size_t old_start = (old_count == 0) ? 0 : 1;
+    const size_t new_start = (new_count == 0) ? 0 : 1;
+    diff << "@@ -" << old_start << "," << old_count
+         << " +" << new_start << "," << new_count << " @@\n";
     for (const auto &line : old_lines_vec) {
         diff << "-" << line << "\n";
     }

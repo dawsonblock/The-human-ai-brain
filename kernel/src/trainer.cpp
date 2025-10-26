@@ -486,13 +486,21 @@ bool BrainTrainer::should_stop_early() const {
 void BrainTrainer::reset_metrics() {
     metrics_ = TrainingMetrics{};
 }
-
 TrainingMetrics BrainTrainer::evaluate(Dataset& dataset) {
-    TrainingMetrics eval_metrics;
+    TrainingMetrics eval_metrics{};
+    const size_t n = dataset.size();
+    if (n == 0) {
+        // Avoid division by zero; return default-initialized metrics
+        eval_metrics.loss = 0.0;
+        eval_metrics.accuracy = 0.0;
+        eval_metrics.samples_processed = 0;
+        return eval_metrics;
+    }
+
     Scalar total_loss = 0.0;
     Scalar total_accuracy = 0.0;
     
-    for (size_t i = 0; i < dataset.size(); ++i) {
+    for (size_t i = 0; i < n; ++i) {
         auto sample = dataset.get(i);
         auto result = brain_.step(sample.input, 0.0);
         
@@ -500,9 +508,10 @@ TrainingMetrics BrainTrainer::evaluate(Dataset& dataset) {
         total_accuracy += compute_accuracy(sample, result);
     }
     
-    eval_metrics.loss = total_loss / dataset.size();
-    eval_metrics.accuracy = total_accuracy / dataset.size();
-    eval_metrics.samples_processed = dataset.size();
+    eval_metrics.loss = total_loss / static_cast<Scalar>(n);
+    eval_metrics.accuracy = total_accuracy / static_cast<Scalar>(n);
+    eval_metrics.samples_processed = n;
+    
     
     return eval_metrics;
 }

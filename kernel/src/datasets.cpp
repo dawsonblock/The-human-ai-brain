@@ -198,6 +198,9 @@ void ReplayBuffer::add_batch(const std::vector<TrainingSample>& samples) {
 
 TrainingSample ReplayBuffer::get(size_t index) {
     size_t actual_size = std::min(buffer_.size(), capacity_);
+    if (actual_size == 0) {
+        throw std::out_of_range("Cannot get from an empty ReplayBuffer.");
+    }
     return buffer_[index % actual_size];
 }
 

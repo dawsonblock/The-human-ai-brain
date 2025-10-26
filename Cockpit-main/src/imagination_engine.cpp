@@ -42,13 +42,19 @@ PlanResult ImaginationEngine::plan(const std::vector<double>& initial_state,
               [](const Trajectory& a, const Trajectory& b) {
                   return a.value_estimate > b.value_estimate;
               });
-    
+
+    // Ensure we have at least one valid trajectory
     if (all_trajectories.empty()) {
-        // No rollouts were performed, return an empty result.
+        result.confidence = 0.0;
         return result;
     }
 
     // Best trajectory
+    result.best_trajectory = all_trajectories[0];
+
+    // Store top alternatives
+    size_t num_alternatives = std::min<size_t>(3, all_trajectories.size() - 1);
+    for (size_t i = 1; i <= num_alternatives; ++i) {
     result.best_trajectory = all_trajectories[0];
     
     // Store top alternatives

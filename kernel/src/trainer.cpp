@@ -16,7 +16,8 @@ BrainTrainer::BrainTrainer(BrainSystem& brain, const TrainerConfig& config)
 void BrainTrainer::train(Dataset& dataset) {
     if (config_.verbose) {
         std::cout << "╔══════════════════════════════════════════════════════════╗\n";
-        std::cout << "║          Brain Training - " << dataset.name() << std::setw(28) << "║\n";
+        std::string title = "Brain Training - " + dataset.name();
+        std::cout << "║ " << title << std::string(58 - title.length(), ' ') << "║\n";
         std::cout << "╚══════════════════════════════════════════════════════════╝\n";
         std::cout << "Configuration:\n";
         std::cout << "  ├─ Epochs: " << config_.num_epochs << "\n";

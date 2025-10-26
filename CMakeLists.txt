@@ -32,8 +32,19 @@ endif()
 # Find OpenSSL for SHA256
 find_package(OpenSSL REQUIRED)
 
-# Find Protobuf (optional, only if building gRPC server)
-find_package(Protobuf QUIET)
+# Build options for gRPC server
+option(BUILD_GRPC_SERVER "Build gRPC server" ON)
+
+# Find Protobuf and gRPC (optional, only if building gRPC server)
+if(BUILD_GRPC_SERVER)
+    find_package(Protobuf REQUIRED)
+    find_package(gRPC CONFIG)
+    if(NOT gRPC_FOUND)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(GRPC REQUIRED grpc++)
+        pkg_check_modules(GRPCPP REQUIRED grpc++_reflection)
+    endif()
+endif()
 
 if(ENABLE_OPENMP)
     find_package(OpenMP)

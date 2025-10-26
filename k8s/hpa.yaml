@@ -30,8 +30,9 @@ spec:
         averageUtilization: 80
   behavior:
     scaleDown:
-      stabilizationWindowSeconds: 300
-      policies:
+            periodSeconds: 60
+          selectPolicy: Min
+        scaleUp:
       - type: Percent
         value: 50
         periodSeconds: 60

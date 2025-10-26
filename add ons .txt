@@ -189,13 +189,41 @@ class PolicyVM:
         self.require = require_signoff
 
     def verify(self, plan:dict)->tuple[bool,str]:
-        op = plan.get("op","")
-        # deny first
-        for rule in self.rules["deny"]:
-            if rule["op"] == op: return False, "denied:"+op
-        # allowlist
-        ok = any(rule["op"] == op for rule in self.rules["allow"])
-        return (ok, "" if ok else "not-allowed:"+op)
+        from fnmatch import fnmatch
+        op = plan.get("op", "")
+
+        def match(rule, plan):
+            if rule.get("op") != op:
+                return False
+        
+            # Check for path matching if the rule has a 'path' key
+            if "path" in rule:
+                plan_path = plan.get("path")
+                if plan_path is None:
+                    return False # Rule requires a path, but plan doesn't have one
+            
+                # Check against deny patterns
+                if not fnmatch(plan_path, rule["path"]):
+                    return False
+
+                # Check against exceptions
+                if "except" in rule:
+                    if any(fnmatch(plan_path, p) for p in rule["except"]):
+                        return False # It's an exception, so don't match the deny rule
+        
+            return True
+
+        # Deny rules have precedence
+        for rule in self.rules.get("deny", []):
+            if match(rule, plan):
+                return False, f"denied:{op}"
+
+        # Allow rules
+        for rule in self.rules.get("allow", []):
+            if match(rule, plan):
+                return True, ""
+
+        return False, f"not-allowed:{op}"
 
     def sign(self, plan:dict, token:str)->str:
         msg = json.dumps(plan, sort_keys=True).encode()

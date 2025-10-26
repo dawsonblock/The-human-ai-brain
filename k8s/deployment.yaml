@@ -26,6 +26,14 @@ spec:
       - name: brain-server
         image: brain-fdqc@sha256:<<IMAGE_DIGEST>>
         imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          runAsGroup: 10001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
         ports:
         - name: grpc
           containerPort: 50051

@@ -43,6 +43,11 @@ PlanResult ImaginationEngine::plan(const std::vector<double>& initial_state,
                   return a.value_estimate > b.value_estimate;
               });
     
+    if (all_trajectories.empty()) {
+        // No rollouts were performed, return an empty result.
+        return result;
+    }
+
     // Best trajectory
     result.best_trajectory = all_trajectories[0];
     

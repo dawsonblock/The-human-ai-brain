@@ -241,10 +241,16 @@ def plan_from_text(prompt:str)->dict:
     # Stub: produce a structured brain step from text; swap with LLM later
     vec = _hash_to_vec(prompt, 60)
     return {
-        "op":"brain.step",
-        "gw": vec,
-        "measure": False,
-        "explain": f"Map text→60D; norm 1.0; length={len(prompt)}"
+        import json, time, pathlib, threading
+        LOG = pathlib.Path("memory_episodic.jsonl")
+        _log_lock = threading.Lock()
+
+        def append(event:dict):
+            event = {"ts":int(time.time()), **event}
+            with _log_lock:
+                # The 'a' mode in open() will create the file if it doesn't exist.
+                with LOG.open("a") as f:
+                    f.write(json.dumps(event) + "\n")
     }
 
 def _hash_to_vec(text:str, d:int):

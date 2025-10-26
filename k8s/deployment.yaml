@@ -52,7 +52,7 @@ spec:
             command:
             - /bin/sh
             - -c
-            - "timeout 2s bash -c 'echo -e \"\\x00\\x00\\x00\\x00\\x00\" | nc localhost 50051'"
+            - "exec 3<>/dev/tcp/127.0.0.1/50051 && printf '\\x00\\x00\\x00\\x00\\x00' >&3"
           initialDelaySeconds: 10
           periodSeconds: 30
           timeoutSeconds: 3
@@ -62,7 +62,7 @@ spec:
             command:
             - /bin/sh
             - -c
-            - "timeout 2s bash -c 'echo -e \"\\x00\\x00\\x00\\x00\\x00\" | nc localhost 50051'"
+            - "exec 3<>/dev/tcp/127.0.0.1/50051 && printf '\\x00\\x00\\x00\\x00\\x00' >&3"
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 2

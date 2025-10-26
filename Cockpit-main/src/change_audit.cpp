@@ -423,20 +423,21 @@ static bool hex_decode(const std::string &hex, std::vector<unsigned char> &out) 
     if (s.rfind("0x", 0) == 0 || s.rfind("0X", 0) == 0) {
         s = s.substr(2);
     }
+    // Enforce a sane upper bound (e.g., 8KB hex => 4KB bytes)
+    constexpr size_t MAX_HEX_LEN = 8192;
+    if (s.size() > MAX_HEX_LEN) return false;
     if (s.size() % 2 != 0) return false;
     out.clear();
     out.reserve(s.size() / 2);
+    auto hex_to_int = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        return -1;
+    };
     for (size_t i = 0; i < s.size(); i += 2) {
-        char c1 = s[i];
-        char c2 = s[i+1];
-        auto hex_to_int = [](char c) -> int {
-            if (c >= '0' && c <= '9') return c - '0';
-            if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-            if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-            return -1;
-        };
-        int hi = hex_to_int(c1);
-        int lo = hex_to_int(c2);
+        int hi = hex_to_int(s[i]);
+        int lo = hex_to_int(s[i+1]);
         if (hi < 0 || lo < 0) return false;
         out.push_back(static_cast<unsigned char>((hi << 4) | lo));
     }

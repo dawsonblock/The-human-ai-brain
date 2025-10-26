@@ -435,22 +435,48 @@ void run_server() {
     setsockopt(server_socket, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
     #endif
     // Optional: disable Nagle for responsiveness on accepted sockets (apply per-connection as well)
-    // int one = 1; setsockopt(server_socket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-    // Set a short accept timeout to allow responsive shutdown
-    struct timeval tv;
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
-    setsockopt(server_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    sockaddr_in server_addr{};
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(g_config.port);
-    
-    if (bind(server_socket, (sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        LOG_ERROR("Failed to bind to port " + std::to_string(g_config.port));
-        close(server_socket);
-        return;
+    std::atomic<size_t> active_handlers{0};
+    const size_t MAX_HANDLERS = static_cast<size_t>(g_config.max_connections);
+
+    LOG_INFO("Server listening on port " + std::to_string(g_config.port));
+
+    while (!g_shutdown_requested) {
+        sockaddr_in client_addr{};
+        socklen_t client_len = sizeof(client_addr);
+
+        int client_socket = accept(server_socket, (sockaddr*)&client_addr, &client_len);
+        if (client_socket < 0) {
+            if (!g_shutdown_requested) {
+                LOG_ERROR("Failed to accept connection");
+            }
+            continue;
+        }
+
+        // Set close-on-exec on accepted socket
+        int flags = fcntl(client_socket, F_GETFD);
+        if (flags != -1) {
+            fcntl(client_socket, F_SETFD, flags | FD_CLOEXEC);
+        }
+
+        size_t in_flight = active_handlers.load();
+        if (in_flight >= MAX_HANDLERS) {
+            // Respond with 503 and close
+            HttpResponse resp;
+            resp.status_code = 503;
+            resp.status_message = "Service Unavailable";
+            resp.body = "{\"error\":\"server busy\"}";
+            std::string response = format_http_response(resp);
+            ::write(client_socket, response.c_str(), response.size());
+            ::close(client_socket);
+            continue;
+        }
+
+        active_handlers++;
+        std::thread([client_socket, &active_handlers]() {
+            handle_client(client_socket);
+            active_handlers--;
+        }).detach();
     }
     
     if (listen(server_socket, g_config.max_connections) < 0) {

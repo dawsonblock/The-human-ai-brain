@@ -344,17 +344,53 @@ HttpResponse route_request(const HttpRequest& req) {
 // New: properly defined client handler
 static void handle_client(int client_socket) {
     try {
-        // Read request
-        std::string raw;
+        // Read request headers first
+        std::string raw_request;
         char buffer[8192];
         ssize_t n;
+        size_t header_end_pos = std::string::npos;
+
         while ((n = ::read(client_socket, buffer, sizeof(buffer))) > 0) {
-            raw.append(buffer, buffer + n);
-            // Stop if we've received end of headers and Content-Length satisfied
-            // Minimal approach: break on connection close; production code should parse Content-Length.
-            if (n < static_cast<ssize_t>(sizeof(buffer))) break;
+            raw_request.append(buffer, n);
+            header_end_pos = raw_request.find("\r\n\r\n");
+            if (header_end_pos != std::string::npos) {
+                break;
+            }
+            // Protect against malicious clients sending endless headers
+            if (raw_request.size() > 16384) { // 16KB header limit
+                throw std::runtime_error("Headers too large");
+            }
         }
-        HttpRequest req = parse_http_request(raw);
+
+        if (header_end_pos == std::string::npos) {
+             throw std::runtime_error("Could not find end of headers");
+        }
+
+        HttpRequest req = parse_http_request(raw_request.substr(0, header_end_pos + 4));
+        
+        // Read body based on Content-Length
+        if (req.headers.count("content-length")) {
+            size_t content_length = std::stoul(req.headers["content-length"]);
+            size_t body_start_pos = header_end_pos + 4;
+            std::string body_so_far = raw_request.substr(body_start_pos);
+            req.body = body_so_far;
+
+            if (req.body.size() < content_length) {
+                req.body.resize(content_length);
+                size_t bytes_to_read = content_length - body_so_far.size();
+                size_t bytes_read = 0;
+                char* body_buffer = &req.body[body_so_far.size()];
+
+                while (bytes_read < bytes_to_read) {
+                    n = ::read(client_socket, body_buffer + bytes_read, bytes_to_read - bytes_read);
+                    if (n <= 0) {
+                        throw std::runtime_error("Failed to read full request body");
+                    }
+                    bytes_read += n;
+                }
+            }
+        }
+
         HttpResponse resp = route_request(req);
         std::string response = format_http_response(resp);
         ::write(client_socket, response.c_str(), response.size());

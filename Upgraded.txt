@@ -141,8 +141,8 @@ brain-ai-production/
 
 ```cpp
 #pragma once
-#include "../core/tensor.hpp"
 #include <Eigen/Dense>
+#include "../core/tensor.hpp"
 #include <complex>
 #include <vector>
 

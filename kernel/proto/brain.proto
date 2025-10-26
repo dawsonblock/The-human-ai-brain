@@ -25,13 +25,13 @@ message StepResp {
   double trace_error = 5;
   
   // Phenomenal report
-  PhenomenalReport phenomenal = 6;
+  PhenomenalReportProto phenomenal = 6;
   
   // Metrics
-  Metrics metrics = 7;
+  MetricsProto metrics = 7;
 }
 
-message PhenomenalReport {
+message PhenomenalReportProto {
   double intensity = 1;
   double clarity = 2;
   double valence = 3;
@@ -42,7 +42,7 @@ message PhenomenalReport {
   double self_salience = 8;
 }
 
-message Metrics {
+message MetricsProto {
   double gw_sparsity = 1;
   double wiring_energy = 2;
   double collapse_rate_hz = 3;

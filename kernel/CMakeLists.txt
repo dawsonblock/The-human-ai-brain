@@ -1,5 +1,6 @@
-# Core library source files (exclude brain_service.cpp - that's for server only)
+# Core library source files
 file(GLOB CORE_SRCS src/*.cpp)
+# Exclude brain_service.cpp - that's for server only
 list(FILTER CORE_SRCS EXCLUDE REGEX ".*brain_service\\.cpp$")
 
 # Brain core library

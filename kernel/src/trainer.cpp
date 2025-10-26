@@ -309,43 +309,77 @@ void BrainTrainer::apply_learning_rate_schedule(size_t epoch) {
                 config_.learning_rate *= config_.lr_decay;
             }
             break;
-        case TrainerConfig::LRSchedule::EXPONENTIAL:
-            config_.learning_rate = initial_learning_rate_ * std::pow(config_.lr_decay, static_cast<Scalar>(epoch + 1));
-            break;
-        case TrainerConfig::LRSchedule::COSINE: {
-            const Scalar t = static_cast<Scalar>(epoch + 1) / static_cast<Scalar>(std::max<size_t>(1, config_.num_epochs));
-            config_.learning_rate = initial_learning_rate_ * static_cast<Scalar>(0.5) * (1.0 + std::cos(M_PI * t));
-            break;
+        void BrainTrainer::save_checkpoint(const std::string& path, size_t epoch) {
+            std::error_code ec;
+            std::filesystem::create_directories(config_.checkpoint_dir, ec);
+            if (ec && config_.verbose) {
+                std::cerr << "Warning: failed to create checkpoint directory '" << config_.checkpoint_dir
+                          << "': " << ec.message() << std::endl;
+            }
+
+            std::ofstream file(path, std::ios::binary | std::ios::trunc);
+            if (!file) {
+                std::cerr << "Failed to save checkpoint: " << path << std::endl;
+                return;
+            }
+    
+            // Write epoch
+            file.write(reinterpret_cast<const char*>(&epoch), sizeof(epoch));
+            if (!file) {
+                std::cerr << "Failed to write epoch to checkpoint: " << path << std::endl;
+                return;
+            }
+    
+            // Write metrics
+            file.write(reinterpret_cast<const char*>(&metrics_.loss), sizeof(metrics_.loss));
+            file.write(reinterpret_cast<const char*>(&metrics_.accuracy), sizeof(metrics_.accuracy));
+            if (!file) {
+                std::cerr << "Failed to write metrics to checkpoint: " << path << std::endl;
+                return;
+            }
+    
+            file.close();
+            if (!file) {
+                std::cerr << "Failed to finalize checkpoint: " << path << std::endl;
+                return;
+            }
+    
+            if (config_.verbose) {
+                std::cout << "✓ Checkpoint saved: " << path << std::endl;
+            }
         }
-        default:
-            // CONSTANT: leave learning_rate unchanged
-            break;
-    }
-}
 
-Scalar BrainTrainer::get_current_learning_rate() const {
-    return config_.learning_rate;
-}
+        void BrainTrainer::load_checkpoint(const std::string& path) {
+            std::ifstream file(path, std::ios::binary);
+            if (!file) {
+                std::cerr << "Failed to load checkpoint: " << path << std::endl;
+                return;
+            }
+    
+            size_t epoch = 0;
+            file.read(reinterpret_cast<char*>(&epoch), sizeof(epoch));
+            if (file.gcount() != static_cast<std::streamsize>(sizeof(epoch))) {
+                std::cerr << "Corrupt checkpoint (epoch) in: " << path << std::endl;
+                return;
+            }
 
-void BrainTrainer::save_checkpoint(const std::string& path, size_t epoch) {
-    std::filesystem::create_directories(config_.checkpoint_dir);
+            file.read(reinterpret_cast<char*>(&metrics_.loss), sizeof(metrics_.loss));
+            if (file.gcount() != static_cast<std::streamsize>(sizeof(metrics_.loss))) {
+                std::cerr << "Corrupt checkpoint (loss) in: " << path << std::endl;
+                return;
+            }
+
+            file.read(reinterpret_cast<char*>(&metrics_.accuracy), sizeof(metrics_.accuracy));
+            if (file.gcount() != static_cast<std::streamsize>(sizeof(metrics_.accuracy))) {
+                std::cerr << "Corrupt checkpoint (accuracy) in: " << path << std::endl;
+                return;
+            }
     
-    // Save checkpoint (simplified - would need actual serialization)
-    std::ofstream file(path, std::ios::binary);
-    if (!file) {
-        std::cerr << "Failed to save checkpoint: " << path << std::endl;
-        return;
-    }
-    
-    // Write epoch
-    file.write(reinterpret_cast<const char*>(&epoch), sizeof(epoch));
-    
-    // Write metrics
-    file.write(reinterpret_cast<const char*>(&metrics_.loss), sizeof(metrics_.loss));
-    file.write(reinterpret_cast<const char*>(&metrics_.accuracy), sizeof(metrics_.accuracy));
-    
-    file.close();
-    
+            if (!file.good() && !file.eof()) {
+                std::cerr << "Error reading checkpoint: " << path << std::endl;
+                return;
+            }
+            file.close();
     if (config_.verbose) {
         std::cout << "✓ Checkpoint saved: " << path << std::endl;
     }

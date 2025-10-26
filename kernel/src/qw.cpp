@@ -159,14 +159,17 @@ void QuantumWorkspace::perform_collapse() {
 }
 
 Scalar QuantumWorkspace::compute_von_neumann_entropy() const {
-    // S(rho) = -Tr(rho log rho)
-    // Approximate using diagonal elements
-    Scalar entropy = 0.0;
+    // S(rho) = -Tr(rho log rho) = -sum_i lambda_i log(lambda_i)
+    // Use proper eigenvalue decomposition for accurate entropy
     
-    for (int i = 0; i < config_.dimension; ++i) {
-        Scalar p = std::max(config_.eigen_floor, state_.rho(i, i).real());
-        if (p > config_.eigen_floor) {
-            entropy -= p * std::log(p);
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXcd> solver(state_.rho);
+    Eigen::VectorXd eigenvalues = solver.eigenvalues();
+    
+    Scalar entropy = 0.0;
+    for (int i = 0; i < eigenvalues.size(); ++i) {
+        Scalar lambda = std::max(config_.eigen_floor, eigenvalues(i));
+        if (lambda > config_.eigen_floor) {
+            entropy -= lambda * std::log(lambda);
         }
     }
     
@@ -221,7 +224,7 @@ void QuantumWorkspace::project_from_gw(const Eigen::VectorXd& gw_state) {
         }
     }
     
-    // Normalize
+    // Normalize to get probabilities
     Scalar sum = 0.0;
     for (auto& a : amplitudes) {
         a = std::abs(a);
@@ -230,11 +233,11 @@ void QuantumWorkspace::project_from_gw(const Eigen::VectorXd& gw_state) {
     if (sum < 1e-10) sum = 1.0;
     for (auto& a : amplitudes) a /= sum;
     
-    // Create density matrix rho = |psi><psi|
+    // Create mixed state (diagonal density matrix) instead of pure state
+    // This better represents uncertainty from GW projection
+    state_.rho = Eigen::MatrixXcd::Zero(n, n);
     for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < n; ++j) {
-            state_.rho(i, j) = Complex(std::sqrt(amplitudes[i] * amplitudes[j]), 0.0);
-        }
+        state_.rho(i, i) = Complex(amplitudes[i], 0.0);
     }
     
     state_.is_collapsed = false;

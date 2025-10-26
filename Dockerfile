@@ -69,7 +69,7 @@ EXPOSE 50051
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD timeout 2s bash -c 'echo -e "\\x00\\x00\\x00\\x00\\x00" | nc localhost 50051' || exit 1
+    CMD timeout 2s bash -c 'exec 3<>/dev/tcp/localhost/50051 && echo -e "\\x00\\x00\\x00\\x00\\x00" >&3 && exec 3<&- && exec 3>&-' || exit 1
 
 # Default command: Run gRPC server
 CMD ["/app/brain_server", "0.0.0.0:50051"]

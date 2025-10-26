@@ -324,7 +324,7 @@ public:
 } // namespace brain_ai
 ```
 
-### 2. Math Utils (include/brain_ai/core/math_utils.hpp) - NEW
+2. Math Utils (include/brain_ai/core/math_utils.hpp) - NEW
 
 ```cpp
 #pragma once

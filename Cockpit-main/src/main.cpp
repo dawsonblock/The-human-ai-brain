@@ -370,23 +370,46 @@ static void handle_client(int client_socket) {
         
         // Read body based on Content-Length
         if (req.headers.count("content-length")) {
-            size_t content_length = std::stoul(req.headers["content-length"]);
+            size_t content_length = 0;
+            try {
+                // Reject leading '+'/'-' and whitespace; ensure numeric
+                const std::string& cl_hdr = req.headers["content-length"];
+                if (cl_hdr.empty() || cl_hdr.find_first_not_of("0123456789") != std::string::npos) {
+                    throw std::runtime_error("Invalid Content-Length");
+                }
+                content_length = std::stoull(cl_hdr);
+            } catch (...) {
+                throw std::runtime_error("Invalid Content-Length");
+            }
+
+            // Enforce sane maximum (e.g., 10MB)
+            constexpr size_t MAX_BODY = 10 * 1024 * 1024;
+            if (content_length > MAX_BODY) {
+                throw std::runtime_error("Request entity too large");
+            }
+
             size_t body_start_pos = header_end_pos + 4;
-            std::string body_so_far = raw_request.substr(body_start_pos);
-            req.body = body_so_far;
+            std::string body_so_far = (body_start_pos < raw_request.size())
+                                      ? raw_request.substr(body_start_pos)
+                                      : std::string();
+            if (body_so_far.size() > content_length) {
+                // Extra bytes beyond Content-Length is malformed
+                throw std::runtime_error("Body exceeds Content-Length");
+            }
+            req.body = std::move(body_so_far);
 
             if (req.body.size() < content_length) {
+                const size_t bytes_to_read = content_length - req.body.size();
                 req.body.resize(content_length);
-                size_t bytes_to_read = content_length - body_so_far.size();
                 size_t bytes_read = 0;
-                char* body_buffer = &req.body[body_so_far.size()];
+                char* body_buffer = &req.body[req.body.size() - bytes_to_read];
 
                 while (bytes_read < bytes_to_read) {
                     n = ::read(client_socket, body_buffer + bytes_read, bytes_to_read - bytes_read);
                     if (n <= 0) {
                         throw std::runtime_error("Failed to read full request body");
                     }
-                    bytes_read += n;
+                    bytes_read += static_cast<size_t>(n);
                 }
             }
         }

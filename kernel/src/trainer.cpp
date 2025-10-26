@@ -303,24 +303,40 @@ void BrainTrainer::update_parameters(const std::vector<Eigen::VectorXd>& gradien
 //   : brain_(brain), config_(config), initial_learning_rate_(config.learning_rate) { ... }
 
 void BrainTrainer::apply_learning_rate_schedule(size_t epoch) {
+    // Ensure sane parameters
+    const Scalar min_lr = static_cast<Scalar>(1e-12);
+    const Scalar max_lr = static_cast<Scalar>(1.0);
+    const Scalar safe_decay = std::max(config_.lr_decay, static_cast<Scalar>(1e-6));
+
     switch (config_.lr_schedule) {
         case TrainerConfig::LRSchedule::STEP:
-            if ((epoch + 1) % config_.lr_step_size == 0) {
-                config_.learning_rate *= config_.lr_decay;
+            if ((epoch + 1) % std::max<size_t>(1, config_.lr_step_size) == 0) {
+                config_.learning_rate *= safe_decay;
             }
             break;
-        void BrainTrainer::save_checkpoint(const std::string& path, size_t epoch) {
-            std::error_code ec;
-            std::filesystem::create_directories(config_.checkpoint_dir, ec);
-            if (ec && config_.verbose) {
-                std::cerr << "Warning: failed to create checkpoint directory '" << config_.checkpoint_dir
-                          << "': " << ec.message() << std::endl;
-            }
-
-            std::ofstream file(path, std::ios::binary | std::ios::trunc);
-            if (!file) {
-                std::cerr << "Failed to save checkpoint: " << path << std::endl;
-                return;
+        case TrainerConfig::LRSchedule::EXPONENTIAL: {
+            // initial_learning_rate_ must be set from config at construction
+            Scalar lr = initial_learning_rate_ * std::pow(safe_decay, static_cast<Scalar>(epoch + 1));
+            config_.learning_rate = lr;
+            break;
+        }
+        case TrainerConfig::LRSchedule::COSINE: {
+            const Scalar denom = static_cast<Scalar>(std::max<size_t>(1, config_.num_epochs));
+            const Scalar t = static_cast<Scalar>(epoch + 1) / denom;
+            Scalar lr = initial_learning_rate_ * static_cast<Scalar>(0.5) * (1.0 + std::cos(M_PI * t));
+            config_.learning_rate = lr;
+            break;
+        }
+        default:
+            // CONSTANT
+            break;
+    }
+    // Final clamp to keep LR in a safe numeric range
+    if (!(std::isfinite)(config_.learning_rate) || config_.learning_rate <= 0) {
+        config_.learning_rate = std::max(min_lr, std::min(max_lr, std::abs(config_.learning_rate)));
+    } else {
+        config_.learning_rate = std::max(min_lr, std::min(max_lr, config_.learning_rate));
+    }
             }
     
             // Write epoch

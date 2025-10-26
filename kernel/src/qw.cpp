@@ -153,9 +153,9 @@ void QuantumWorkspace::perform_collapse() {
     state_.last_collapse = std::chrono::steady_clock::now();
     state_.sim_time_at_last_collapse = sim_time_;
     
-    // Record metrics (disabled for now)
-    // Metrics::instance().record_collapse();
-    // Metrics::instance().record_entropy(state_.entropy);
+    // Record metrics
+    Metrics::instance().record_collapse();
+    Metrics::instance().record_entropy(state_.entropy);
 }
 
 Scalar QuantumWorkspace::compute_von_neumann_entropy() const {
@@ -173,7 +173,7 @@ Scalar QuantumWorkspace::compute_von_neumann_entropy() const {
         }
     }
     
-    // Metrics::instance().record_entropy(entropy);
+    Metrics::instance().record_entropy(entropy);
     return entropy;
 }
 
@@ -189,7 +189,7 @@ void QuantumWorkspace::enforce_trace_one() {
         state_.rho /= trace;
     }
     
-    // Metrics::instance().record_trace_error(std::abs(trace - 1.0));
+    Metrics::instance().record_trace_error(std::abs(trace - 1.0));
 }
 
 void QuantumWorkspace::enforce_psd() {

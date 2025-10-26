@@ -2,32 +2,47 @@
 
 #include <atomic>
 #include <string>
-#include <map>
+#include <unordered_map>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 
 namespace hab {
 
-// Metrics collector for Prometheus
+// Thread-safe metrics collector for Prometheus
+// Uses proper double-checked locking and reader-writer locks for performance
 class Metrics {
 public:
-    static Metrics& instance();
+    // Meyer's singleton with thread-safe initialization (C++11+)
+    static Metrics& instance() {
+        static Metrics instance;
+        return instance;
+    }
     
-    // Counter metrics
+    // Delete copy/move to enforce singleton
+    Metrics(const Metrics&) = delete;
+    Metrics& operator=(const Metrics&) = delete;
+    Metrics(Metrics&&) = delete;
+    Metrics& operator=(Metrics&&) = delete;
+    
+    // Counter metrics (monotonically increasing)
     void increment_counter(const std::string& name, double value = 1.0);
     double get_counter(const std::string& name) const;
     
-    // Gauge metrics
+    // Gauge metrics (can go up or down)
     void set_gauge(const std::string& name, double value);
     double get_gauge(const std::string& name) const;
     
-    // Histogram (simplified - just tracks last value and count)
+    // Histogram (simplified - tracks sum, count, min, max)
     void record_histogram(const std::string& name, double value);
     
     // Get all metrics as Prometheus text format
     std::string export_prometheus() const;
     
-    // Predefined metrics
+    // Reset all metrics (useful for testing)
+    void reset();
+    
+    // Predefined metrics for brain components
     void record_entropy(double value);
     void record_trace_error(double value);
     void record_collapse();
@@ -37,12 +52,37 @@ public:
     
 private:
     Metrics() = default;
+    ~Metrics() = default;
     
-    mutable std::mutex mutex_;
-    std::map<std::string, std::atomic<double>> counters_;
-    std::map<std::string, std::atomic<double>> gauges_;
-    std::map<std::string, std::atomic<double>> histograms_;
-    std::map<std::string, std::atomic<size_t>> histogram_counts_;
+    // Metric storage structures
+    struct CounterData {
+        std::atomic<double> value{0.0};
+    };
+    
+    struct GaugeData {
+        std::atomic<double> value{0.0};
+    };
+    
+    struct HistogramData {
+        std::atomic<double> sum{0.0};
+        std::atomic<size_t> count{0};
+        std::atomic<double> min{std::numeric_limits<double>::max()};
+        std::atomic<double> max{std::numeric_limits<double>::lowest()};
+    };
+    
+    // Use shared_mutex for reader-writer lock (many readers, few writers)
+    mutable std::shared_mutex counters_mutex_;
+    mutable std::shared_mutex gauges_mutex_;
+    mutable std::shared_mutex histograms_mutex_;
+    
+    std::unordered_map<std::string, std::unique_ptr<CounterData>> counters_;
+    std::unordered_map<std::string, std::unique_ptr<GaugeData>> gauges_;
+    std::unordered_map<std::string, std::unique_ptr<HistogramData>> histograms_;
+    
+    // Helper to get or create metric
+    CounterData* get_or_create_counter(const std::string& name);
+    GaugeData* get_or_create_gauge(const std::string& name);
+    HistogramData* get_or_create_histogram(const std::string& name);
 };
 
 } // namespace hab

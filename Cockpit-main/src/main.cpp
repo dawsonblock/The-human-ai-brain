@@ -237,8 +237,21 @@ HttpRequest parse_http_request(const std::string& raw) {
 }
 
 std::string format_http_response(const HttpResponse& resp) {
+    auto sanitize = [](const std::string& s) {
+        std::string out;
+        out.reserve(s.size());
+        for (unsigned char c : s) {
+            if (c == '\r' || c == '\n') continue;
+            if (c >= 0x20 && c <= 0x7E) {
+                out.push_back(static_cast<char>(c));
+            }
+        }
+        if (out.empty()) out = "OK";
+        return out;
+    };
     std::ostringstream stream;
-    stream << "HTTP/1.1 " << resp.status_code << " " << resp.status_message << "\r\n";
+    const std::string status_msg = sanitize(resp.status_message);
+    stream << "HTTP/1.1 " << resp.status_code << " " << status_msg << "\r\n";
     stream << "Content-Type: " << resp.content_type << "\r\n";
     stream << "Content-Length: " << resp.body.size() << "\r\n";
     stream << "Connection: close\r\n\r\n";

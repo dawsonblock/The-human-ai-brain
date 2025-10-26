@@ -142,7 +142,6 @@ public:
     
     // Sampling strategies
     std::vector<TrainingSample> sample_batch(size_t batch_size);
-    std::vector<TrainingSample> sample_prioritized(size_t batch_size, Scalar alpha = 0.6);
     
     void clear() { buffer_.clear(); write_pos_ = 0; }
     bool is_full() const { return buffer_.size() >= capacity_; }

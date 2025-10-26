@@ -310,18 +310,23 @@ std::string save_report(const Report &report, const std::string &out_dir) {
 static std::vector<std::string> split_lines(const std::string &text) {
     std::vector<std::string> lines;
     std::string current;
+    bool last_was_newline = false;
     for (char c : text) {
         if (c == '\n') {
             lines.push_back(current);
             current.clear();
+            last_was_newline = true;
         } else if (c == '\r') {
             // Ignore carriage returns.
         } else {
             current.push_back(c);
+            last_was_newline = false;
         }
     }
-    // Push the final line even if empty.
-    lines.push_back(current);
+    // Only push the final line if the file does not end with a newline or it has content
+    if (!last_was_newline || !current.empty()) {
+        lines.push_back(current);
+    }
     return lines;
 }
 

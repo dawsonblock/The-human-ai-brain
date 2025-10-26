@@ -292,13 +292,20 @@ int main() {
         
         int choice;
         std::cin >> choice;
-        
+
+        if (std::cin.fail()) {
+            std::cout << "Invalid input. Please enter a number.\n";
+            std::cin.clear(); // Clear error flags
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // Discard bad input
+            continue;
+        }
+    
         if (choice == 0) {
             std::cout << "\nShutting down brain system...\n";
             std::cout << "Goodbye! 👋\n\n";
             break;
         }
-        
+    
         switch (choice) {
             case 1: demo_single_cycle(brain); break;
             case 2: demo_consciousness_stream(brain); break;
@@ -312,9 +319,9 @@ int main() {
             default:
                 std::cout << "Invalid option. Please try again.\n";
         }
-        
+    
         std::cout << "\nPress Enter to continue...";
-        std::cin.ignore();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         std::cin.get();
     }
     

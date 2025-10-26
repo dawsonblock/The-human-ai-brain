@@ -60,7 +60,6 @@ COPY --from=builder --chown=brain:brain /build/build/kernel/brain_server /app/
 COPY --from=builder --chown=brain:brain /build/build/kernel/interactive_demo /app/
 
 # Copy configuration files
-COPY --from=builder --chown=brain:brain /build/configs /app/configs
 
 # Switch to app user
 USER brain

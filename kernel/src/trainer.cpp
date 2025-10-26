@@ -208,7 +208,12 @@ Scalar BrainTrainer::compute_accuracy(const TrainingSample& sample, const Cognit
     }
     
     // Compare with true label
-    int true_class = std::stoi(sample.label);
+    int true_class = 0;
+    try {
+        true_class = std::stoi(sample.label);
+    } catch (const std::exception&) {
+        return 0.0;
+    }
     return (predicted_class == true_class) ? 1.0 : 0.0;
 }
 

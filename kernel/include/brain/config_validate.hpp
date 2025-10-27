@@ -3,6 +3,7 @@
 #include "qw.hpp"
 #include "gw.hpp"
 #include "memory.hpp"
+#include "tiered_memory.hpp"
 #include "brain_system.hpp"
 #include <string>
 #include <vector>
@@ -31,6 +32,9 @@ ValidationResult validate_gw_config(const GWConfig& config);
 
 // Validate Memory configuration
 ValidationResult validate_memory_config(const MemoryConfig& config);
+
+// Validate Tiered LTM configuration
+ValidationResult validate_tiered_ltm_config(const TieredLTMConfig& config);
 
 // Validate complete Brain configuration
 ValidationResult validate_brain_config(const BrainConfig& config);

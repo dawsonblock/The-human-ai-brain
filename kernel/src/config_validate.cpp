@@ -1,4 +1,5 @@
 #include "brain/config_validate.hpp"
+#include "brain/tiered_memory.hpp"
 #include <sstream>
 #include <fstream>
 #include <stdexcept>
@@ -306,6 +307,103 @@ void validate_brain_config_strict(const BrainConfig& config) {
         throw std::invalid_argument("Brain config validation failed:\n" + 
                                    result.format_messages());
     }
+}
+
+// ============================================================================
+// TIERED LTM VALIDATION
+// ============================================================================
+
+ValidationResult validate_tiered_ltm_config(const TieredLTMConfig& config) {
+    ValidationResult result;
+    result.valid = true;
+    
+    // Hot tier validation
+    if (config.hot.capacity < 1000) {
+        result.warnings.push_back("hot tier capacity " + std::to_string(config.hot.capacity) + 
+                                  " is small, may underutilize fast memory");
+    }
+    if (config.hot.capacity > 100000) {
+        result.warnings.push_back("hot tier capacity " + std::to_string(config.hot.capacity) + 
+                                  " is very large, may exceed RAM capacity");
+    }
+    if (config.hot.hnsw_M < 8 || config.hot.hnsw_M > 64) {
+        result.warnings.push_back("hnsw_M " + std::to_string(config.hot.hnsw_M) + 
+                                  " outside typical range [8, 64], may affect performance");
+    }
+    if (config.hot.hnsw_ef_search > 256) {
+        result.warnings.push_back("hnsw_ef_search " + std::to_string(config.hot.hnsw_ef_search) + 
+                                  " is high, may exceed latency budget");
+    }
+    if (config.hot.latency_budget_ms < 5 || config.hot.latency_budget_ms > 50) {
+        result.warnings.push_back("hot tier latency budget " + std::to_string(config.hot.latency_budget_ms) + 
+                                  "ms outside typical range [5, 50]");
+    }
+    
+    // Warm tier validation
+    if (config.warm.capacity < config.hot.capacity) {
+        result.errors.push_back("warm tier capacity must be >= hot tier capacity");
+        result.valid = false;
+    }
+    if (config.warm.ivf_nlist < 256) {
+        result.warnings.push_back("ivf_nlist " + std::to_string(config.warm.ivf_nlist) + 
+                                  " is small, may reduce recall");
+    }
+    if (config.warm.pq_m < 32 || config.warm.pq_m > 128) {
+        result.warnings.push_back("pq_m " + std::to_string(config.warm.pq_m) + 
+                                  " outside typical range [32, 128]");
+    }
+    if (config.warm.recall_target < 0.8 || config.warm.recall_target > 1.0) {
+        result.errors.push_back("recall_target must be in range [0.8, 1.0], got " + 
+                               std::to_string(config.warm.recall_target));
+        result.valid = false;
+    }
+    if (config.warm.latency_budget_ms < 20 || config.warm.latency_budget_ms > 100) {
+        result.warnings.push_back("warm tier latency budget " + std::to_string(config.warm.latency_budget_ms) + 
+                                  "ms outside typical range [20, 100]");
+    }
+    
+    // Cold tier validation
+    if (config.cold.capacity < config.warm.capacity) {
+        result.warnings.push_back("cold tier capacity should typically be >= warm tier capacity");
+    }
+    if (config.cold.storage_path.empty()) {
+        result.errors.push_back("cold storage path cannot be empty");
+        result.valid = false;
+    }
+    
+    // Consolidation threshold
+    if (config.consolidation_threshold < 0.0 || config.consolidation_threshold > 1.0) {
+        result.errors.push_back("consolidation_threshold must be in range [0, 1], got " + 
+                               std::to_string(config.consolidation_threshold));
+        result.valid = false;
+    }
+    
+    // Dedup validation
+    if (config.dedup.num_hashes < 64 || config.dedup.num_hashes > 256) {
+        result.warnings.push_back("dedup num_hashes " + std::to_string(config.dedup.num_hashes) + 
+                                  " outside typical range [64, 256]");
+    }
+    if (config.dedup.similarity_threshold < 0.8 || config.dedup.similarity_threshold > 1.0) {
+        result.errors.push_back("dedup similarity_threshold must be in range [0.8, 1.0], got " + 
+                               std::to_string(config.dedup.similarity_threshold));
+        result.valid = false;
+    }
+    
+    // Decay validation
+    if (config.decay.half_life_days < 1.0 || config.decay.half_life_days > 365.0) {
+        result.warnings.push_back("decay half_life_days " + std::to_string(config.decay.half_life_days) + 
+                                  " outside typical range [1, 365]");
+    }
+    
+    // Policy validation
+    if (config.promotion_policies.empty()) {
+        result.warnings.push_back("no promotion policies specified, tiering may be static");
+    }
+    if (config.demotion_policies.empty()) {
+        result.warnings.push_back("no demotion policies specified, hot tier may fill up");
+    }
+    
+    return result;
 }
 
 // ============================================================================

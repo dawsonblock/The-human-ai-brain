@@ -17,15 +17,77 @@ quantum:
 # Global Workspace Configuration
 global_workspace:
   dimension: 60
-  top_k: 12
+  top_k: 12  # Keep sparse for bounded latency
   learning_rate: 0.001
   sparsity_target: 0.2
 
-# Memory System Configuration
+# Memory System Configuration (Tiered Architecture for Million-Scale)
 memory:
-  stm_capacity: 20
-  ltm_capacity: 1000
+  # Short-Term Memory (STM) - Scaled up with sparse GW
+  stm_capacity: 96  # 64-128 range, using 96 for balance
+  stm_decay_tau: 3.0
+  
+  # Long-Term Memory (LTM) - Tiered Storage
+  ltm:
+    # Hot tier: In-memory HNSW index (fast retrieval <10ms)
+    hot:
+      capacity: 50000
+      index: HNSW
+      hnsw_M: 32                    # Bi-directional links per node
+      hnsw_ef_construction: 200     # Build-time search depth
+      hnsw_ef_search: 128           # Query-time search depth (capped for latency)
+      latency_budget_ms: 10
+    
+    # Warm tier: SSD-backed IVF-PQ (medium retrieval <40ms)
+    warm:
+      capacity: 300000
+      index: IVF_PQ
+      ivf_nlist: 4096               # IVF clusters
+      pq_m: 64                      # Product quantization subquantizers
+      pq_nbits: 8                   # 8-bit PQ for 4-8x RAM reduction
+      recall_target: 0.95           # Target 95% recall with ~1-3% drop from quantization
+      latency_budget_ms: 40
+    
+    # Cold tier: Object store archival (async retrieval)
+    cold:
+      capacity: 2000000
+      format: parquet
+      storage_path: ./cold_storage
+      async_mode: true
+      compression: snappy
+  
+  # Consolidation and Quality Control
   consolidation_threshold: 0.7
+  
+  # Deduplication (MinHash-based)
+  dedup:
+    method: minhash_128             # 128-bit MinHash signatures
+    num_hashes: 128
+    similarity_threshold: 0.95      # Block if similarity > 95%
+  
+  # Temporal and Usage Decay
+  decay:
+    half_life_days: 30              # Importance decays 50% in 30 days
+    enable_temporal_decay: true
+    enable_usage_decay: true
+  
+  # Promotion/Demotion Policies
+  promotion_policies:
+    - recent_use                    # Recently accessed items
+    - task_reward                   # High-reward items
+    - novelty                       # Novel/important items
+  
+  demotion_policies:
+    - stale                         # Old, unused items
+    - low_reward                    # Low-reward items
+    - redundant                     # Duplicate/low-importance items
+  
+  # Retrieval Configuration
+  retrieval:
+    hot_k: 50                       # Retrieve top-50 from hot tier
+    rerank_enabled: true            # Enable MLP/cross-encoder reranking
+    backfill_threshold: 0.5         # Backfill from warm if score < 0.5
+    provenance_filter: true         # Block low-trust hits from steering GW
 
 # Lindblad Operators Configuration
 lindblad:

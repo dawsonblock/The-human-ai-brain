@@ -8,6 +8,11 @@
 #include <string>
 #include <memory>
 #include <array>
+#include <mutex>
+#include <shared_mutex>
+#include <atomic>
+#include <optional>
+#include <stdexcept>
 
 namespace hab {
 
@@ -80,6 +85,14 @@ struct DecayConfig {
     bool enable_usage_decay = true;
 };
 
+// Retrieval configuration
+struct RetrievalConfig {
+    int hot_k = 50;                     // Retrieve top-k from hot tier
+    bool rerank_enabled = true;         // Enable MLP/cross-encoder reranking
+    Scalar backfill_threshold = 0.5;    // Backfill from warm if score < threshold
+    bool provenance_filter = true;      // Block low-trust hits from steering GW
+};
+
 // Complete tiered LTM configuration
 struct TieredLTMConfig {
     HotTierConfig hot;
@@ -87,6 +100,7 @@ struct TieredLTMConfig {
     ColdTierConfig cold;
     DedupConfig dedup;
     DecayConfig decay;
+    RetrievalConfig retrieval;
     Scalar consolidation_threshold = 0.7;
     std::vector<PromotionPolicy> promotion_policies = {
         PromotionPolicy::RECENT_USE,
@@ -115,10 +129,18 @@ struct MemoryItem {
     // Metadata for tiering
     Scalar importance = 0.5;
     Scalar provenance_score = 1.0;      // Trust score [0, 1]
-    int access_count = 0;
+    std::atomic<int> access_count{0};   // Thread-safe access count
     TimePoint last_access;
     std::string source_doc_id;
     std::string tier;                   // "hot", "warm", "cold"
+    
+    // Validation
+    bool is_valid() const {
+        return !embedding.size() == 0 && 
+               importance >= 0.0 && importance <= 1.0 &&
+               provenance_score >= 0.0 && provenance_score <= 1.0 &&
+               !source_doc_id.empty();
+    }
     
     // MinHash signature for deduplication
     std::array<uint64_t, 2> minhash_sig = {0, 0};
@@ -127,6 +149,80 @@ struct MemoryItem {
                    timestamp(std::chrono::steady_clock::now()),
                    last_access(std::chrono::steady_clock::now()),
                    tier("hot") {}
+    
+    // Custom copy constructor (atomic cannot be copied directly)
+    MemoryItem(const MemoryItem& other) 
+        : embedding(other.embedding),
+          gw_state(other.gw_state),
+          qw_onehot(other.qw_onehot),
+          action(other.action),
+          reward(other.reward),
+          timestamp(other.timestamp),
+          importance(other.importance),
+          provenance_score(other.provenance_score),
+          access_count(other.access_count.load(std::memory_order_relaxed)),
+          last_access(other.last_access),
+          source_doc_id(other.source_doc_id),
+          tier(other.tier),
+          minhash_sig(other.minhash_sig) {}
+    
+    // Custom copy assignment (atomic cannot be copied directly)
+    MemoryItem& operator=(const MemoryItem& other) {
+        if (this != &other) {
+            embedding = other.embedding;
+            gw_state = other.gw_state;
+            qw_onehot = other.qw_onehot;
+            action = other.action;
+            reward = other.reward;
+            timestamp = other.timestamp;
+            importance = other.importance;
+            provenance_score = other.provenance_score;
+            access_count.store(other.access_count.load(std::memory_order_relaxed), 
+                              std::memory_order_relaxed);
+            last_access = other.last_access;
+            source_doc_id = other.source_doc_id;
+            tier = other.tier;
+            minhash_sig = other.minhash_sig;
+        }
+        return *this;
+    }
+    
+    // Move constructor
+    MemoryItem(MemoryItem&& other) noexcept
+        : embedding(std::move(other.embedding)),
+          gw_state(std::move(other.gw_state)),
+          qw_onehot(std::move(other.qw_onehot)),
+          action(other.action),
+          reward(other.reward),
+          timestamp(other.timestamp),
+          importance(other.importance),
+          provenance_score(other.provenance_score),
+          access_count(other.access_count.load(std::memory_order_relaxed)),
+          last_access(other.last_access),
+          source_doc_id(std::move(other.source_doc_id)),
+          tier(std::move(other.tier)),
+          minhash_sig(other.minhash_sig) {}
+    
+    // Move assignment
+    MemoryItem& operator=(MemoryItem&& other) noexcept {
+        if (this != &other) {
+            embedding = std::move(other.embedding);
+            gw_state = std::move(other.gw_state);
+            qw_onehot = std::move(other.qw_onehot);
+            action = other.action;
+            reward = other.reward;
+            timestamp = other.timestamp;
+            importance = other.importance;
+            provenance_score = other.provenance_score;
+            access_count.store(other.access_count.load(std::memory_order_relaxed), 
+                              std::memory_order_relaxed);
+            last_access = other.last_access;
+            source_doc_id = std::move(other.source_doc_id);
+            tier = std::move(other.tier);
+            minhash_sig = other.minhash_sig;
+        }
+        return *this;
+    }
 };
 
 // ============================================================================
@@ -199,9 +295,11 @@ public:
     explicit TieredLTM(const TieredLTMConfig& config = TieredLTMConfig{});
     
     // Add item with automatic tier placement
-    void add(const MemoryItem& item);
+    // Returns: true if added, false if duplicate or invalid
+    bool add(const MemoryItem& item);
     
     // Retrieve top-k items with smart routing
+    // Throws: std::invalid_argument if query is empty or k < 1
     RetrievalResult retrieve(const Eigen::VectorXd& query, int k = 50);
     
     // Consolidate from STM
@@ -230,18 +328,91 @@ public:
     
     // Statistics
     struct Stats {
-        int hot_count = 0;
-        int warm_count = 0;
-        int cold_count = 0;
-        int total_count = 0;
-        Scalar avg_hot_latency_ms = 0.0;
-        Scalar avg_warm_latency_ms = 0.0;
-        int duplicates_blocked = 0;
-        int promotions = 0;
-        int demotions = 0;
+        std::atomic<int> hot_count{0};
+        std::atomic<int> warm_count{0};
+        std::atomic<int> cold_count{0};
+        std::atomic<int> total_count{0};
+        std::atomic<int> duplicates_blocked{0};
+        std::atomic<int> promotions{0};
+        std::atomic<int> demotions{0};
+        std::atomic<int> total_queries{0};
+        Scalar avg_hot_latency_ms = 0.0;  // Updated under lock
+        Scalar avg_warm_latency_ms = 0.0; // Updated under lock
+        
+        // Default constructor
+        Stats() = default;
+        
+        // Custom copy constructor (atomic cannot be copied directly)
+        Stats(const Stats& other) 
+            : hot_count(other.hot_count.load(std::memory_order_relaxed)),
+              warm_count(other.warm_count.load(std::memory_order_relaxed)),
+              cold_count(other.cold_count.load(std::memory_order_relaxed)),
+              total_count(other.total_count.load(std::memory_order_relaxed)),
+              duplicates_blocked(other.duplicates_blocked.load(std::memory_order_relaxed)),
+              promotions(other.promotions.load(std::memory_order_relaxed)),
+              demotions(other.demotions.load(std::memory_order_relaxed)),
+              total_queries(other.total_queries.load(std::memory_order_relaxed)),
+              avg_hot_latency_ms(other.avg_hot_latency_ms),
+              avg_warm_latency_ms(other.avg_warm_latency_ms) {}
+        
+        // Custom copy assignment
+        Stats& operator=(const Stats& other) {
+            if (this != &other) {
+                hot_count.store(other.hot_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                warm_count.store(other.warm_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                cold_count.store(other.cold_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                total_count.store(other.total_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                duplicates_blocked.store(other.duplicates_blocked.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                promotions.store(other.promotions.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                demotions.store(other.demotions.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                total_queries.store(other.total_queries.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                avg_hot_latency_ms = other.avg_hot_latency_ms;
+                avg_warm_latency_ms = other.avg_warm_latency_ms;
+            }
+            return *this;
+        }
+        
+        // Move constructor
+        Stats(Stats&& other) noexcept
+            : hot_count(other.hot_count.load(std::memory_order_relaxed)),
+              warm_count(other.warm_count.load(std::memory_order_relaxed)),
+              cold_count(other.cold_count.load(std::memory_order_relaxed)),
+              total_count(other.total_count.load(std::memory_order_relaxed)),
+              duplicates_blocked(other.duplicates_blocked.load(std::memory_order_relaxed)),
+              promotions(other.promotions.load(std::memory_order_relaxed)),
+              demotions(other.demotions.load(std::memory_order_relaxed)),
+              total_queries(other.total_queries.load(std::memory_order_relaxed)),
+              avg_hot_latency_ms(other.avg_hot_latency_ms),
+              avg_warm_latency_ms(other.avg_warm_latency_ms) {}
+        
+        // Move assignment
+        Stats& operator=(Stats&& other) noexcept {
+            if (this != &other) {
+                hot_count.store(other.hot_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                warm_count.store(other.warm_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                cold_count.store(other.cold_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                total_count.store(other.total_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                duplicates_blocked.store(other.duplicates_blocked.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                promotions.store(other.promotions.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                demotions.store(other.demotions.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                total_queries.store(other.total_queries.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                avg_hot_latency_ms = other.avg_hot_latency_ms;
+                avg_warm_latency_ms = other.avg_warm_latency_ms;
+            }
+            return *this;
+        }
     };
     
-    Stats get_stats() const { return stats_; }
+    Stats get_stats() const;
+    
+    // Clear all tiers (for testing)
+    void clear();
+    
+    // Get tier sizes
+    size_t hot_size() const;
+    size_t warm_size() const;
+    size_t cold_size() const;
+    size_t total_size() const;
     
 private:
     TieredLTMConfig config_;
@@ -249,21 +420,26 @@ private:
     // Hot tier (in-memory HNSW index)
     std::vector<MemoryItem> hot_tier_;
     std::unordered_map<std::string, size_t> hot_index_; // doc_id -> index
+    mutable std::shared_mutex hot_mutex_;  // Read-write lock for hot tier
     
     // Warm tier (simulated IVF-PQ)
     std::vector<MemoryItem> warm_tier_;
     std::unordered_map<std::string, size_t> warm_index_;
+    mutable std::shared_mutex warm_mutex_; // Read-write lock for warm tier
     
     // Cold tier (archival)
     std::vector<MemoryItem> cold_tier_;
     std::unordered_map<std::string, size_t> cold_index_;
+    mutable std::shared_mutex cold_mutex_; // Read-write lock for cold tier
     
     // Deduplication
     MinHashDedup dedup_;
     std::vector<std::array<uint64_t, 2>> signatures_;
+    std::mutex dedup_mutex_;  // Protects signatures_
     
     // Statistics
     Stats stats_;
+    mutable std::mutex stats_mutex_;  // Protects non-atomic stats
     
     // Helper: compute decay multiplier
     Scalar compute_decay_multiplier(const MemoryItem& item) const;
@@ -284,6 +460,21 @@ private:
     
     // Helper: cosine similarity
     Scalar cosine_similarity(const Eigen::VectorXd& a, const Eigen::VectorXd& b) const;
+    
+    // Helper: validate item before adding
+    bool validate_item(const MemoryItem& item) const;
+    
+    // Helper: update index after tier modification
+    void rebuild_hot_index();
+    void rebuild_warm_index();
+    void rebuild_cold_index();
+    
+    // Helper: evict item from tier (LRU-like)
+    std::optional<MemoryItem> evict_from_hot();
+    std::optional<MemoryItem> evict_from_warm();
+    
+    // Helper: record access for promotion scoring
+    void record_access(MemoryItem& item);
 };
 
 } // namespace hab

@@ -394,6 +394,9 @@ ValidationResult validate_tiered_ltm_config(const TieredLTMConfig& config) {
         result.warnings.push_back("decay half_life_days " + std::to_string(config.decay.half_life_days) + 
                                   " outside typical range [1, 365]");
     }
+    if (config.decay.half_life_days < 7.0 && config.decay.enable_temporal_decay) {
+        result.warnings.push_back("decay half_life_days < 7 may cause aggressive memory loss");
+    }
     
     // Policy validation
     if (config.promotion_policies.empty()) {
@@ -401,6 +404,45 @@ ValidationResult validate_tiered_ltm_config(const TieredLTMConfig& config) {
     }
     if (config.demotion_policies.empty()) {
         result.warnings.push_back("no demotion policies specified, hot tier may fill up");
+    }
+    
+    // Retrieval validation
+    if (config.retrieval.hot_k < 10) {
+        result.warnings.push_back("retrieval hot_k " + std::to_string(config.retrieval.hot_k) + 
+                                  " is small, may miss relevant results");
+    }
+    if (config.retrieval.hot_k > config.hot.capacity / 2) {
+        result.warnings.push_back("retrieval hot_k exceeds 50% of hot tier capacity");
+    }
+    if (config.retrieval.backfill_threshold < 0.3 || config.retrieval.backfill_threshold > 0.8) {
+        result.warnings.push_back("backfill_threshold " + std::to_string(config.retrieval.backfill_threshold) + 
+                                  " outside typical range [0.3, 0.8]");
+    }
+    
+    // Cross-tier consistency checks
+    if (config.warm.latency_budget_ms <= config.hot.latency_budget_ms) {
+        result.errors.push_back("warm tier latency budget must be > hot tier latency budget");
+        result.valid = false;
+    }
+    
+    // Capacity ratio checks
+    int hot_to_warm_ratio = config.warm.capacity / config.hot.capacity;
+    if (hot_to_warm_ratio < 2 || hot_to_warm_ratio > 20) {
+        result.warnings.push_back("warm/hot capacity ratio " + std::to_string(hot_to_warm_ratio) + 
+                                  " outside typical range [2, 20]");
+    }
+    
+    int warm_to_cold_ratio = config.cold.capacity / config.warm.capacity;
+    if (warm_to_cold_ratio < 2 || warm_to_cold_ratio > 20) {
+        result.warnings.push_back("cold/warm capacity ratio " + std::to_string(warm_to_cold_ratio) + 
+                                  " outside typical range [2, 20]");
+    }
+    
+    // Total capacity check
+    int total_capacity = config.hot.capacity + config.warm.capacity + config.cold.capacity;
+    if (total_capacity > 10000000) {  // 10M items
+        result.warnings.push_back("total capacity " + std::to_string(total_capacity) + 
+                                  " is very large, may require significant resources");
     }
     
     return result;

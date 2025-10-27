@@ -14,6 +14,19 @@ BrainTrainer::BrainTrainer(BrainSystem& brain, const TrainerConfig& config)
 }
 
 void BrainTrainer::train(Dataset& dataset) {
+    if (config_.enable_checkpoints) {
+        try {
+            std::error_code ec;
+            std::filesystem::create_directories(config_.checkpoint_dir, ec);
+            if (ec) {
+                std::cerr << "Checkpoint directory create failed: " << config_.checkpoint_dir
+                          << " (" << ec.message() << ")\n";
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Checkpoint directory exception: " << e.what() << "\n";
+        }
+    }
+
     if (config_.verbose) {
         std::cout << "╔══════════════════════════════════════════════════════════╗\n";
         std::string title = "Brain Training - " + dataset.name();
@@ -30,15 +43,19 @@ void BrainTrainer::train(Dataset& dataset) {
     
     for (size_t epoch = 0; epoch < config_.num_epochs; ++epoch) {
         train_epoch(dataset, epoch);
-        
-        // Learning rate schedule
         apply_learning_rate_schedule(epoch);
-        
-        // Checkpointing
         if (config_.enable_checkpoints && (epoch + 1) % config_.checkpoint_interval == 0) {
             std::string path = config_.checkpoint_dir + "/checkpoint_epoch_" + std::to_string(epoch + 1) + ".bin";
             save_checkpoint(path, epoch + 1);
         }
+    }
+
+    if (config_.verbose) {
+        std::cout << "\n✓ Training complete!\n";
+        std::cout << "  Final Loss: " << metrics_.loss << "\n";
+        std::cout << "  Final Accuracy: " << (metrics_.accuracy * 100.0) << "%\n";
+    }
+}
         
         // Early stopping
         if (config_.enable_early_stopping && should_stop_early()) {

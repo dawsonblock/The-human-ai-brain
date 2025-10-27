@@ -1,0 +1,12 @@
+{
+  "ocr_url": "http://localhost:8000/v1/chat/completions",
+  "ocr_model": "deepseek-ai/DeepSeek-OCR",
+  "prompt": "Return clean Markdown for this page.",
+  "qdrant_url": "https://97329d44-cc8b-4a6a-8ed5-065a33c32c21.eu-west-2-0.aws.cloud.qdrant.io:6333",
+  "qdrant_api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.KomCHeB3dA9oBP_4awPx_K7ACu3-pSaY5hzYfZJhaiM",
+  "qdrant_collection": "brain_docs",
+  "embed_url": "http://localhost:8081/embed",
+  "dpi": 150,
+  "chunk_size": 2000,
+  "chunk_overlap": 200
+}

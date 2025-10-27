@@ -1,0 +1,42 @@
+# Build directories
+build/
+cmake-build-*/
+
+# Test data
+test_data/
+
+# Output directories
+output/
+*.jsonl
+
+# Temporary files
+tmp/
+*.tmp
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+
+# Generated files
+*.o
+*.a
+*.so
+*.dylib
+*.exe

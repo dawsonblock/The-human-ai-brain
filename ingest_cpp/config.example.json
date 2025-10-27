@@ -1,0 +1,11 @@
+{
+  "ocr_url": "http://localhost:8000/v1/chat/completions",
+  "ocr_model": "deepseek-ai/DeepSeek-OCR",
+  "prompt": "Return clean Markdown for this page.",
+  "qdrant_url": "http://localhost:6333",
+  "qdrant_collection": "docs",
+  "embed_url": "http://localhost:8081/embed",
+  "dpi": 300,
+  "chunk_size": 2000,
+  "chunk_overlap": 200
+}

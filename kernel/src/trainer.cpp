@@ -351,9 +351,9 @@ void BrainTrainer::update_parameters(const std::vector<Eigen::VectorXd>& gradien
         }
 
         // Final clamp to keep LR in a safe numeric range
-        if (!std::isfinite(config_.learning_rate) || std::isnan(config_.learning_rate) || config_.learning_rate <= 0) {
+        if (!std::isfinite(config_.learning_rate) || config_.learning_rate <= 0) {
             // Reset to a safe default when invalid
-            config_.learning_rate = std::clamp(initial_learning_rate_, min_lr, max_lr);
+            config_.learning_rate = std::clamp(init_lr, min_lr, max_lr);
         } else {
             config_.learning_rate = std::clamp(config_.learning_rate, min_lr, max_lr);
         }

@@ -107,6 +107,9 @@ void SyntheticDataset::generate_circle(size_t n, int dim) {
 }
 
 void SyntheticDataset::generate_spiral(size_t n, int dim) {
+    if (dim < 2) {
+        throw std::invalid_argument("generate_spiral requires dim >= 2");
+    }
     std::normal_distribution<Scalar> noise(0.0, 0.05);
     
     for (size_t i = 0; i < n; ++i) {

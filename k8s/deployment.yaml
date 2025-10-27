@@ -82,11 +82,6 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 3
-        volumeMounts:
-        - name: checkpoint-storage
-          mountPath: /data/checkpoints
-        - name: data-storage
-          mountPath: /data
       volumes:
       - name: checkpoint-storage
         persistentVolumeClaim:

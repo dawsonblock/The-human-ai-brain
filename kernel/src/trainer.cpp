@@ -326,32 +326,54 @@ void BrainTrainer::update_parameters(const std::vector<Eigen::VectorXd>& gradien
         }
     }
 }
+// In constructor initialization list, ensure initialization occurs:
+BrainTrainer::BrainTrainer(BrainSystem& brain, const TrainerConfig& config)
+    : brain_(brain), config_(config) {
+    // Initialize initial_learning_rate_ safely
+    if (std::isfinite(config_.learning_rate) && config_.learning_rate > 0) {
+        initial_learning_rate_ = config_.learning_rate;
+    } else {
+        initial_learning_rate_ = static_cast<Scalar>(1e-3);
+        config_.learning_rate = initial_learning_rate_;
+    }
+    initialize_optimizer();
+}
 
-// In class initialization (e.g., constructor) ensure initial_learning_rate_ is set:
-// BrainTrainer::BrainTrainer(BrainSystem& brain, const TrainerConfig& config)
-//   : brain_(brain), config_(config), initial_learning_rate_(config.learning_rate) { ... }
+void BrainTrainer::apply_learning_rate_schedule(size_t epoch) {
+    const Scalar min_lr = static_cast<Scalar>(1e-12);
+    const Scalar max_lr = static_cast<Scalar>(1.0);
+    const Scalar safe_decay = std::clamp(config_.lr_decay, static_cast<Scalar>(1e-6), static_cast<Scalar>(1.0));
 
-    // In trainer.hpp (private members)
-    // Scalar initial_learning_rate_ = 1e-3;  // declared as a member
+    // Fallback if initial_learning_rate_ is invalid
+    if (!std::isfinite(initial_learning_rate_) || initial_learning_rate_ <= 0) {
+        initial_learning_rate_ = std::clamp(config_.learning_rate > 0 ? config_.learning_rate
+                                                                      : static_cast<Scalar>(1e-3),
+                                            min_lr, max_lr);
+    }
 
-    // In constructor initialization list:
-    // BrainTrainer::BrainTrainer(BrainSystem& brain, const TrainerConfig& config)
-    //     : brain_(brain), config_(config) {
-    //     initial_learning_rate_ = (config_.learning_rate > 0 && std::isfinite(config_.learning_rate))
-    //                                  ? config_.learning_rate
-    //                                  : static_cast<Scalar>(1e-3);
-    //     initialize_optimizer();
-    // }
-
-    void BrainTrainer::apply_learning_rate_schedule(size_t epoch) {
-        const Scalar min_lr = static_cast<Scalar>(1e-12);
-        const Scalar max_lr = static_cast<Scalar>(1.0);
-        const Scalar safe_decay = std::clamp(config_.lr_decay, static_cast<Scalar>(1e-6), static_cast<Scalar>(1.0));
-
-        switch (config_.lr_schedule) {
-            case TrainerConfig::LRSchedule::STEP:
-                if ((epoch + 1) % std::max<size_t>(1, config_.lr_step_size) == 0) {
-                    config_.learning_rate = std::clamp(config_.learning_rate * safe_decay, min_lr, max_lr);
+    switch (config_.lr_schedule) {
+        case TrainerConfig::LRSchedule::STEP:
+            if ((epoch + 1) % std::max<size_t>(1, config_.lr_step_size) == 0) {
+                config_.learning_rate = std::clamp(config_.learning_rate * safe_decay, min_lr, max_lr);
+            }
+            break;
+        case TrainerConfig::LRSchedule::EXPONENTIAL: {
+            Scalar lr = initial_learning_rate_ * std::pow(safe_decay, static_cast<Scalar>(epoch + 1));
+            config_.learning_rate = std::clamp(lr, min_lr, max_lr);
+            break;
+        }
+        case TrainerConfig::LRSchedule::COSINE: {
+            const Scalar denom = static_cast<Scalar>(std::max<size_t>(1, config_.num_epochs));
+            const Scalar t = static_cast<Scalar>(epoch + 1) / denom;
+            const Scalar pi = static_cast<Scalar>(M_PI);
+            Scalar lr = initial_learning_rate_ * static_cast<Scalar>(0.5) * (1.0 + std::cos(pi * t));
+            config_.learning_rate = std::clamp(lr, min_lr, max_lr);
+            break;
+        }
+        default:
+            // CONSTANT: keep current learning_rate within bounds
+            config_.learning_rate = std::clamp(config_.learning_rate, min_lr, max_lr);
+            break;
                 }
                 break;
             case TrainerConfig::LRSchedule::EXPONENTIAL: {

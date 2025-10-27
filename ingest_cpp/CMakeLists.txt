@@ -1,9 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
 project(human_ai_brain_ingest CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_BUILD_TYPE Release)
+# Don't override CMAKE_BUILD_TYPE if it's already set
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
 
 # Find dependencies
 find_package(PkgConfig REQUIRED)
@@ -12,8 +15,22 @@ find_package(OpenSSL REQUIRED)
 find_package(CURL REQUIRED)
 
 # nlohmann-json header-only interface library
-add_library(nlohmann_json INTERFACE)
-target_include_directories(nlohmann_json INTERFACE third_party)
+# Check if target already exists (might be defined by Cockpit-main)
+if(NOT TARGET nlohmann_json::nlohmann_json AND NOT TARGET nlohmann_json)
+    find_package(nlohmann_json 3.2.0 QUIET)
+    if(NOT nlohmann_json_FOUND)
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlohmann/json.hpp")
+            add_library(nlohmann_json INTERFACE)
+            target_include_directories(nlohmann_json INTERFACE third_party)
+        else()
+            include(FetchContent)
+            FetchContent_Declare(json
+                URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz
+            )
+            FetchContent_MakeAvailable(json)
+        endif()
+    endif()
+endif()
 
 # brain_ingest library
 add_library(brain_ingest

@@ -1,21 +1,32 @@
-# Multi-stage Dockerfile for Human-AI Brain FDQC v3.1.0
+# Multi-stage build for Human-AI Brain System
+FROM ubuntu:22.04 AS builder
 
-# ============================================================================
-# Stage 1: Builder - Compile the brain system
-# ============================================================================
-FROM debian:bookworm-slim AS builder
+# Avoid interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
+    ninja-build \
     git \
-    libgrpc++-dev \
-    libprotobuf-dev \
-    protobuf-compiler-grpc \
     libeigen3-dev \
+    libprotobuf-dev \
+    protobuf-compiler \
+    protobuf-compiler-grpc \
+    libgrpc++-dev \
     libssl-dev \
+    libcurl4-openssl-dev \
+    libpoppler-cpp-dev \
+    libgtest-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
+
+# Build GTest
+RUN cd /usr/src/gtest && \
+    cmake . && \
+    make && \
+    cp lib/*.a /usr/lib/ || cp *.a /usr/lib/
 
 # Set working directory
 WORKDIR /build
@@ -23,61 +34,70 @@ WORKDIR /build
 # Copy source code
 COPY . .
 
-# Build the project
-RUN cmake -S . -B build \
+# Configure and build
+RUN cmake -S . -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_GRPC_SERVER=ON \
-    -DBUILD_TESTS=OFF \
-    -DENABLE_OPENMP=ON
+    -DBUILD_TESTS=ON \
+    -DBUILD_GRPC_SERVER=ON && \
+    cmake --build build -j$(nproc)
 
-RUN cmake --build build --target brain_server -j$(nproc)
-RUN cmake --build build --target interactive_demo -j$(nproc)
+# Run tests during build (optional, comment out if you want faster builds)
+RUN cd build && ctest --output-on-failure
 
 # ============================================================================
-# Stage 2: Runtime - Minimal image with only runtime dependencies
+# Runtime stage - minimal image with only runtime dependencies
 # ============================================================================
-FROM debian:bookworm-slim AS runtime
+FROM ubuntu:22.04 AS runtime
 
-# Install runtime dependencies
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install runtime dependencies only
 RUN apt-get update && apt-get install -y \
-    libgrpc++1.51 \
-    libprotobuf32 \
+    libprotobuf23 \
+    libgrpc++1.45 \
     libssl3 \
-    libgomp1 \
-    ca-certificates \
+    libcurl4 \
+    libpoppler-cpp0v5 \
     && rm -rf /var/lib/apt/lists/*
 
-# Create app user
-RUN useradd -m -u 1000 brain && \
-    mkdir -p /app /data /checkpoints && \
-    chown -R brain:brain /app /data /checkpoints
+# Create non-root user
+RUN useradd -m -u 1000 -s /bin/bash brainuser
 
 # Set working directory
 WORKDIR /app
 
 # Copy binaries from builder
-COPY --from=builder --chown=brain:brain /build/build/kernel/brain_server /app/
-COPY --from=builder --chown=brain:brain /build/build/kernel/interactive_demo /app/
+COPY --from=builder /build/build/kernel/brain_server /app/brain_server
+COPY --from=builder /build/build/kernel/interactive_demo /app/interactive_demo
 
 # Copy configuration files
+COPY --from=builder /build/configs /app/configs
 
-# Switch to app user
-USER brain
+# Change ownership
+RUN chown -R brainuser:brainuser /app
+
+# Switch to non-root user
+USER brainuser
 
 # Expose gRPC port
 EXPOSE 50051
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD timeout 2s bash -c 'exec 3<>/dev/tcp/localhost/50051 && echo -e "\\x00\\x00\\x00\\x00\\x00" >&3 && exec 3<&- && exec 3>&-' || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD grpc_health_probe -addr=localhost:50051 || exit 1
 
-# Default command: Run gRPC server
-CMD ["/app/brain_server", "0.0.0.0:50051"]
+# Default command
+CMD ["/app/brain_server"]
 
 # ============================================================================
-# Stage 3: Development - Include development tools
+# Development stage - includes build tools and source code
 # ============================================================================
 FROM builder AS development
+
+WORKDIR /workspace
+
+# Copy full source
+COPY . .
 
 # Install additional development tools
 RUN apt-get update && apt-get install -y \
@@ -85,41 +105,7 @@ RUN apt-get update && apt-get install -y \
     valgrind \
     clang-format \
     clang-tidy \
-    doxygen \
-    graphviz \
-    python3 \
-    python3-pip \
+    vim \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-RUN pip3 install --no-cache-dir \
-    grpcio \
-    grpcio-tools \
-    numpy \
-    matplotlib
-
-WORKDIR /workspace
-
-# Copy test client
-COPY test_client.py /workspace/
-
 CMD ["/bin/bash"]
-
-# ============================================================================
-# Build instructions:
-#
-# Production image:
-#   docker build --target runtime -t brain-fdqc:latest .
-#
-# Development image:
-#   docker build --target development -t brain-fdqc:dev .
-#
-# Run server:
-#   docker run -p 50051:50051 brain-fdqc:latest
-#
-# Run demo:
-#   docker run -it brain-fdqc:latest /app/interactive_demo
-#
-# Custom address:
-#   docker run -p 8080:8080 brain-fdqc:latest /app/brain_server 0.0.0.0:8080
-# ============================================================================

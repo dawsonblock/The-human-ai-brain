@@ -166,9 +166,7 @@ CognitiveResult BrainSystem::step(const Eigen::VectorXd& sensory_input,
     prev_h_global_ = result.h_global;
     prev_prediction_ = result.action;
     
-    // Update metrics
-    Metrics::instance().record_entropy(result.entropy);
-    Metrics::instance().record_collapse();
+    // Note: Metrics collection is handled by gRPC service layer
     
     return result;
 }

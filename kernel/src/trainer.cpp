@@ -249,61 +249,68 @@ Scalar BrainTrainer::compute_accuracy(const TrainingSample& sample, const Cognit
     Scalar max_val = result.h_global(0);
     const int search_dims = std::min(10, static_cast<int>(result.h_global.size()));
     for (int i = 1; i < search_dims; ++i) {
-        if (result.h_global(i) > max_val) {
-            max_val = result.h_global(i);
-            predicted_class = i;
+        step_count_++;
+
+        Scalar lr = get_current_learning_rate();
+        if (!std::isfinite(lr) || lr <= 0) {
+            lr = static_cast<Scalar>(1e-6);
         }
-    }
-    
-    // Compare with true label
-    int true_class = 0;
-    try {
-        true_class = std::stoi(sample.label);
-    } catch (const std::exception&) {
-        return 0.0;
-    }
-    if (true_class < 0 || true_class >= search_dims) {
-        return 0.0;
-    }
-    return (predicted_class == true_class) ? 1.0 : 0.0;
-}
 
-void BrainTrainer::update_parameters(const std::vector<Eigen::VectorXd>& gradients) {
-    step_count_++;
-    Scalar lr = get_current_learning_rate();
-
-    auto is_bad = [](const Eigen::VectorXd& g) {
-        if (g.size() == 0) return true;
-        for (int i = 0; i < g.size(); ++i) {
-            if (!std::isfinite(g[i])) return true;
-        }
-        return false;
-    };
-
-    switch (config_.optimizer) {
-        case TrainerConfig::Optimizer::SGD: {
-            for (size_t i = 0; i < gradients.size(); ++i) {
-                if (is_bad(gradients[i])) continue;
-                if (i >= momentum_buffers_.size()) {
-                    momentum_buffers_.push_back(Eigen::VectorXd::Zero(gradients[i].size()));
-                }
-                momentum_buffers_[i] = config_.momentum * momentum_buffers_[i] - lr * gradients[i];
-                // Apply update to parameters here
+        auto is_bad = [](const Eigen::VectorXd& g) {
+            if (g.size() == 0) return true;
+            for (int i = 0; i < g.size(); ++i) {
+                if (!std::isfinite(g[i])) return true;
             }
-            break;
-        }
-        case TrainerConfig::Optimizer::ADAM: {
-            for (size_t i = 0; i < gradients.size(); ++i) {
-                if (is_bad(gradients[i])) continue;
-                if (i >= momentum_buffers_.size()) {
-                    momentum_buffers_.push_back(Eigen::VectorXd::Zero(gradients[i].size()));
-                    velocity_buffers_.push_back(Eigen::VectorXd::Zero(gradients[i].size()));
-                }
-                momentum_buffers_[i] = config_.beta1 * momentum_buffers_[i] + (1.0 - config_.beta1) * gradients[i];
-                velocity_buffers_[i] = config_.beta2 * velocity_buffers_[i] + (1.0 - config_.beta2) * gradients[i].array().square().matrix();
+            return false;
+        };
 
-                const Scalar bias_correction1 = 1.0 - std::pow(config_.beta1, static_cast<double>(step_count_));
-                const Scalar bias_correction2 = 1.0 - std::pow(config_.beta2, static_cast<double>(step_count_));
+        switch (config_.optimizer) {
+            case TrainerConfig::Optimizer::SGD: {
+                for (size_t i = 0; i < gradients.size(); ++i) {
+                    if (is_bad(gradients[i])) continue;
+                    if (i >= momentum_buffers_.size()) {
+                        momentum_buffers_.push_back(Eigen::VectorXd::Zero(gradients[i].size()));
+                    }
+                    momentum_buffers_[i] = config_.momentum * momentum_buffers_[i] - lr * gradients[i];
+                    // Apply update to parameters here
+                }
+                break;
+            }
+            case TrainerConfig::Optimizer::ADAM: {
+                for (size_t i = 0; i < gradients.size(); ++i) {
+                    if (is_bad(gradients[i])) continue;
+                    if (i >= momentum_buffers_.size()) {
+                        momentum_buffers_.push_back(Eigen::VectorXd::Zero(gradients[i].size()));
+                        velocity_buffers_.push_back(Eigen::VectorXd::Zero(gradients[i].size()));
+                    }
+                    momentum_buffers_[i] = config_.beta1 * momentum_buffers_[i] + (1.0 - config_.beta1) * gradients[i];
+                    velocity_buffers_[i] = config_.beta2 * velocity_buffers_[i] + (1.0 - config_.beta2) * gradients[i].array().square().matrix();
+
+                    const Scalar bias_correction1 = std::max<Scalar>(1e-12, 1.0 - std::pow(config_.beta1, static_cast<double>(step_count_)));
+                    const Scalar bias_correction2 = std::max<Scalar>(1e-12, 1.0 - std::pow(config_.beta2, static_cast<double>(step_count_)));
+                    Eigen::ArrayXd m_hat = momentum_buffers_[i].array() / bias_correction1;
+                    Eigen::ArrayXd v_hat = velocity_buffers_[i].array() / bias_correction2;
+
+                    Eigen::ArrayXd denom = v_hat.sqrt();
+                    denom = denom.max(config_.epsilon); // clamp to epsilon
+                    Eigen::ArrayXd update = (-lr) * (m_hat / denom);
+                    (void)update; // Apply update to parameters here
+                }
+                break;
+            }
+            case TrainerConfig::Optimizer::RMSPROP: {
+                for (size_t i = 0; i < gradients.size(); ++i) {
+                    if (is_bad(gradients[i])) continue;
+                    if (i >= velocity_buffers_.size()) {
+                        velocity_buffers_.push_back(Eigen::VectorXd::Zero(gradients[i].size()));
+                    }
+                    velocity_buffers_[i] = config_.momentum * velocity_buffers_[i] +
+                                           (1.0 - config_.momentum) * gradients[i].array().square().matrix();
+
+                    Eigen::ArrayXd denom = velocity_buffers_[i].array().sqrt();
+                    denom = denom.max(config_.epsilon); // clamp to epsilon
+                    Eigen::ArrayXd update = (-lr) * gradients[i].array() / denom;
+                    (void)update; // Apply update to parameters here
                 Eigen::ArrayXd m_hat = momentum_buffers_[i].array() / bias_correction1;
                 Eigen::ArrayXd v_hat = velocity_buffers_[i].array() / bias_correction2;
 

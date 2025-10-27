@@ -19,7 +19,7 @@ services:
       - LOG_LEVEL=INFO
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "timeout", "2s", "bash", "-c", "echo -e '\\x00\\x00\\x00\\x00\\x00' | nc localhost 50051"]
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/50051 || exit 1"]
       interval: 30s
       timeout: 3s
       retries: 3

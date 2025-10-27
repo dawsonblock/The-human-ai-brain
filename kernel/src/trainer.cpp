@@ -194,20 +194,26 @@ void BrainTrainer::train_batch(const TrainingBatch& batch) {
 
 Scalar BrainTrainer::compute_loss(const TrainingSample& sample, const CognitiveResult& result) {
     switch (config_.mode) {
-        case TrainerConfig::Mode::SUPERVISED:
-            if (!sample.target.size()) {
-                return 0.0;  // No target provided
+        case TrainerConfig::Mode::SUPERVISED: {
+            const auto tgt_size = sample.target.size();
+            const auto pred_size = result.h_global.size();
+            if (tgt_size == 0 || pred_size == 0 || tgt_size != pred_size) {
+                // Dimension mismatch or missing target; avoid invalid Eigen ops
+                return 0.0;
             }
             return loss::mse_loss(result.h_global, sample.target);
-            
+        }
         case TrainerConfig::Mode::REINFORCEMENT:
             // Policy gradient loss (negative expected return)
             return -sample.reward * result.entropy;  // Entropy bonus for exploration
-            
-        case TrainerConfig::Mode::SELF_SUPERVISED:
-            // Reconstruction loss (predict next state)
+        case TrainerConfig::Mode::SELF_SUPERVISED: {
+            const auto in_size = sample.input.size();
+            const auto wm_size = result.h_wm.size();
+            if (in_size == 0 || wm_size == 0 || in_size != wm_size) {
+                return 0.0;
+            }
             return loss::mse_loss(result.h_wm, sample.input);
-            
+        }
         default:
             return 0.0;
     }

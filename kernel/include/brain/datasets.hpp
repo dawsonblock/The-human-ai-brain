@@ -135,7 +135,10 @@ public:
     void add(const TrainingSample& sample);
     void add_batch(const std::vector<TrainingSample>& samples);
     
-    size_t size() const override { return std::min(buffer_.size(), capacity_); }
+    size_t size() const override {
+        if (capacity_ == 0) return 0;
+        return std::min(buffer_.size(), capacity_);
+    }
     TrainingSample get(size_t index) override;
     void shuffle() override;
     std::string name() const override { return "ReplayBuffer"; }
@@ -144,7 +147,7 @@ public:
     std::vector<TrainingSample> sample_batch(size_t batch_size);
     
     void clear() { buffer_.clear(); write_pos_ = 0; }
-    bool is_full() const { return buffer_.size() >= capacity_; }
+    bool is_full() const { return capacity_ > 0 && buffer_.size() >= capacity_; }
     
 private:
     std::vector<TrainingSample> buffer_;

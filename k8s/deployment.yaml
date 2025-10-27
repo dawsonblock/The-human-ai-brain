@@ -55,6 +55,13 @@ spec:
           limits:
             memory: "1Gi"
             cpu: "1000m"
+        volumeMounts:
+        - name: checkpoint-storage
+          mountPath: /data/checkpoints
+        - name: data-storage
+          mountPath: /data
+        - name: tmp
+          mountPath: /tmp
         livenessProbe:
           exec:
             command:

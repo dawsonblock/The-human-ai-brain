@@ -251,60 +251,59 @@ Scalar BrainTrainer::compute_accuracy(const TrainingSample& sample, const Cognit
 void BrainTrainer::update_parameters(const std::vector<Eigen::VectorXd>& gradients) {
     step_count_++;
     Scalar lr = get_current_learning_rate();
-    
+
+    auto is_bad = [](const Eigen::VectorXd& g) {
+        if (g.size() == 0) return true;
+        for (int i = 0; i < g.size(); ++i) {
+            if (!std::isfinite(g[i])) return true;
+        }
+        return false;
+    };
+
     switch (config_.optimizer) {
         case TrainerConfig::Optimizer::SGD: {
-            // Simple SGD with momentum
             for (size_t i = 0; i < gradients.size(); ++i) {
+                if (is_bad(gradients[i])) continue;
                 if (i >= momentum_buffers_.size()) {
                     momentum_buffers_.push_back(Eigen::VectorXd::Zero(gradients[i].size()));
                 }
                 momentum_buffers_[i] = config_.momentum * momentum_buffers_[i] - lr * gradients[i];
-                // Apply update (would need actual parameter access)
+                // Apply update to parameters here
             }
             break;
         }
-        
         case TrainerConfig::Optimizer::ADAM: {
-            // Adam optimizer
             for (size_t i = 0; i < gradients.size(); ++i) {
+                if (is_bad(gradients[i])) continue;
                 if (i >= momentum_buffers_.size()) {
                     momentum_buffers_.push_back(Eigen::VectorXd::Zero(gradients[i].size()));
                     velocity_buffers_.push_back(Eigen::VectorXd::Zero(gradients[i].size()));
                 }
-                
-                // Update biased first moment estimate
-                momentum_buffers_[i] = config_.beta1 * momentum_buffers_[i] + 
-                                      (1.0 - config_.beta1) * gradients[i];
-                
-                // Update biased second moment estimate
-                velocity_buffers_[i] = config_.beta2 * velocity_buffers_[i] + 
-                                      (1.0 - config_.beta2) * gradients[i].array().square().matrix();
-                
-                // Bias correction
-                Eigen::VectorXd m_hat = momentum_buffers_[i] / (1.0 - std::pow(config_.beta1, step_count_));
-                Eigen::VectorXd v_hat = velocity_buffers_[i] / (1.0 - std::pow(config_.beta2, step_count_));
-                
-                // Update parameters
-                Eigen::VectorXd update = -lr * m_hat.array() / (v_hat.array().sqrt() + config_.epsilon);
-                // Apply update (would need actual parameter access)
+                momentum_buffers_[i] = config_.beta1 * momentum_buffers_[i] + (1.0 - config_.beta1) * gradients[i];
+                velocity_buffers_[i] = config_.beta2 * velocity_buffers_[i] + (1.0 - config_.beta2) * gradients[i].array().square().matrix();
+
+                const Scalar bias_correction1 = 1.0 - std::pow(config_.beta1, static_cast<double>(step_count_));
+                const Scalar bias_correction2 = 1.0 - std::pow(config_.beta2, static_cast<double>(step_count_));
+                Eigen::ArrayXd m_hat = momentum_buffers_[i].array() / bias_correction1;
+                Eigen::ArrayXd v_hat = velocity_buffers_[i].array() / bias_correction2;
+
+                Eigen::ArrayXd denom = v_hat.sqrt() + config_.epsilon;
+                Eigen::ArrayXd update = (-lr) * (m_hat / denom);
+                (void)update; // Apply update to parameters here
             }
             break;
         }
-        
         case TrainerConfig::Optimizer::RMSPROP: {
-            // RMSProp optimizer
             for (size_t i = 0; i < gradients.size(); ++i) {
+                if (is_bad(gradients[i])) continue;
                 if (i >= velocity_buffers_.size()) {
                     velocity_buffers_.push_back(Eigen::VectorXd::Zero(gradients[i].size()));
                 }
-                
-                velocity_buffers_[i] = config_.momentum * velocity_buffers_[i] + 
-                                      (1.0 - config_.momentum) * gradients[i].array().square().matrix();
-                
-                Eigen::VectorXd update = -lr * gradients[i].array() / 
-                                        (velocity_buffers_[i].array().sqrt() + config_.epsilon);
-                // Apply update (would need actual parameter access)
+                velocity_buffers_[i] = config_.momentum * velocity_buffers_[i] +
+                                       (1.0 - config_.momentum) * gradients[i].array().square().matrix();
+
+                Eigen::ArrayXd update = (-lr) * gradients[i].array() / (velocity_buffers_[i].array().sqrt() + config_.epsilon);
+                (void)update; // Apply update to parameters here
             }
             break;
         }

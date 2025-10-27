@@ -16,6 +16,7 @@ spec:
     port: 50051
     targetPort: 50051
     protocol: TCP
+    appProtocol: grpc
   selector:
     app: brain-fdqc
     component: server

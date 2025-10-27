@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: brain-server
+  labels:
+    app: brain-fdqc
+    component: server
+    version: v3.1.0
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: brain-fdqc
+      component: server
+  template:
+    metadata:
+      labels:
+        app: brain-fdqc
+        component: server
+        version: v3.1.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      containers:
+      - name: brain-server
+        image: brain-fdqc@sha256:<<IMAGE_DIGEST>>
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          runAsGroup: 10001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        ports:
+        - name: grpc
+          containerPort: 50051
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        env:
+        - name: SERVER_ADDRESS
+          value: "0.0.0.0:50051"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: CHECKPOINT_DIR
+          value: "/data/checkpoints"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: checkpoint-storage
+          mountPath: /data/checkpoints
+        - name: data-storage
+          mountPath: /data
+        - name: tmp
+          mountPath: /tmp
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - grpc_health_probe -addr=127.0.0.1:50051 || exit 1
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - /bin/grpc_health_probe
+            - -addr=127.0.0.1:50051
+            - -rpc-timeout=2s
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: checkpoint-storage
+        persistentVolumeClaim:
+          claimName: brain-checkpoint-pvc
+      - name: data-storage
+        persistentVolumeClaim:
+          claimName: brain-data-pvc
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - brain-fdqc
+              topologyKey: kubernetes.io/hostname

@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  # Brain gRPC Server
+  brain-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: brain-fdqc:latest
+    container_name: brain-server
+    ports:
+      - "50051:50051"
+    volumes:
+      - ./checkpoints:/data/checkpoints
+      - ./data:/data
+    environment:
+      - SERVER_ADDRESS=0.0.0.0:50051
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/50051 && exec 3>&- 3<&- || exit 1'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - brain-network
+
+  # Python Client (for testing)
+  brain-client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    image: brain-fdqc:dev
+    container_name: brain-client
+    depends_on:
+      - brain-server
+    command: python3 /workspace/test_client.py
+    environment:
+      - BRAIN_SERVER_ADDRESS=brain-server:50051
+    networks:
+      - brain-network
+
+  # Prometheus (optional - for metrics)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: brain-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - brain-network
+
+  # Grafana (optional - for visualization)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: brain-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    networks:
+      - brain-network
+
+networks:
+  brain-network:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+# ============================================================================
+# Usage:
+#
+# Start all services:
+#   docker-compose up -d
+#
+# Start only server:
+#   docker-compose up -d brain-server
+#
+# View logs:
+#   docker-compose logs -f brain-server
+#
+# Run test client:
+#   docker-compose run --rm brain-client
+#
+# Stop all:
+#   docker-compose down
+#
+# Rebuild:
+#   docker-compose build
+# ============================================================================

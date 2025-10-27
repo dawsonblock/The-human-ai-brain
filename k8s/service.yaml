@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: brain-server
+  labels:
+    app: brain-fdqc
+    component: server
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+    protocol: TCP
+    appProtocol: grpc
+  selector:
+    app: brain-fdqc
+    component: server
+  sessionAffinity: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: brain-server-metrics
+  labels:
+    app: brain-fdqc
+    component: server
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  selector:
+    app: brain-fdqc
+    component: server
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: brain-server-headless
+  labels:
+    app: brain-fdqc
+    component: server
+spec:
+  clusterIP: None
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+    protocol: TCP
+  selector:
+    app: brain-fdqc
+    component: server

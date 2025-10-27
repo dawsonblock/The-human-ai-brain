@@ -68,9 +68,9 @@ spec:
         readinessProbe:
           exec:
             command:
-            - /bin/sh
-            - -c
-            - grpc_health_probe -addr=127.0.0.1:50051 -rpc-timeout=2s || exit 1
+            - /bin/grpc_health_probe
+            - -addr=127.0.0.1:50051
+            - -rpc-timeout=2s
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 3

@@ -203,9 +203,12 @@ void BrainTrainer::train_batch(const TrainingBatch& batch) {
     }
     
     // Average metrics
-    metrics_.loss = batch_loss / static_cast<Scalar>(batch.samples.size());
-    metrics_.accuracy = batch_accuracy / static_cast<Scalar>(batch.samples.size());
-    metrics_.avg_entropy = batch_entropy / static_cast<Scalar>(batch.samples.size());
+    case TrainerConfig::Mode::REINFORCEMENT: {
+        // Entropy-regularized objective: negative reward plus bounded entropy bonus
+        const Scalar entropy = std::clamp(result.entropy, static_cast<Scalar>(0.0), static_cast<Scalar>(5.0));
+        const Scalar entropy_coef = static_cast<Scalar>(0.01); // small, stable bonus
+        return static_cast<Scalar>(-1.0) * sample.reward + entropy_coef * entropy;
+    }
     metrics_.collapse_rate = (static_cast<Scalar>(collapse_count) / static_cast<Scalar>(batch.samples.size())) * 8.2;  // Approximate Hz
 }
 

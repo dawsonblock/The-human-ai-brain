@@ -103,18 +103,23 @@ void BrainTrainer::train_epoch(Dataset& dataset, size_t epoch) {
 
         const size_t start_idx = batch_id * config_.batch_size;
         const size_t end_idx = std::min(start_idx + config_.batch_size, dataset.size());
-        for (size_t i = start_idx; i < end_idx; ++i) {
-            batch.samples.push_back(dataset.get(i));
+        if (config_.verbose && config_.log_interval > 0 && (batch_id + 1) % config_.log_interval == 0) {
+            auto& os = std::cout;
+            std::ios old_state(nullptr);
+            old_state.copyfmt(os);
+            os << "Epoch " << (epoch + 1) << "/" << config_.num_epochs 
+               << " - Batch " << (batch_id + 1) << "/" << num_batches
+               << " - Loss: " << std::fixed << std::setprecision(4) << metrics_.loss
+               << " - Acc: " << std::fixed << std::setprecision(2) << (metrics_.accuracy * 100.0) << "%"
+               << " - LR: " << std::scientific << std::setprecision(2) << get_current_learning_rate();
+            // Print newline on last batch to avoid leaving the cursor mid-line
+            if (batch_id + 1 == num_batches) {
+                os << std::endl;
+            } else {
+                os << "\r" << std::flush;
+            }
+            os.copyfmt(old_state);
         }
-
-        if (batch.samples.empty()) {
-            continue;
-        }
-        
-        // Train on batch
-        train_batch(batch);
-        
-        // Accumulate metrics
         epoch_loss += metrics_.loss * batch.samples.size();
         epoch_accuracy += metrics_.accuracy * batch.samples.size();
         samples_in_epoch += batch.samples.size();

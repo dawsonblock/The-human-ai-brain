@@ -1,232 +1,90 @@
+// kernel/src/metrics.cpp
+// Implementation file for MetricsCollector
+// Most logic is in the header using inline implementations
+
 #include "brain/metrics.hpp"
 #include <sstream>
 #include <iomanip>
-#include <algorithm>
+#include <cmath>
 
 namespace hab {
 
-// Counter operations
-void Metrics::increment_counter(const std::string& name, double value) {
-    auto* counter = get_or_create_counter(name);
-    if (counter) {
-        // Atomic fetch_add for thread-safe increment
-        double old_val = counter->value.load(std::memory_order_relaxed);
-        while (!counter->value.compare_exchange_weak(old_val, old_val + value,
-                                                       std::memory_order_release,
-                                                       std::memory_order_relaxed)) {
-            // Retry if CAS fails
-        }
-    }
-}
+// Implementation note: Core metric recording methods are inline in header
+// This file provides format conversion methods that are too large for inline
 
-double Metrics::get_counter(const std::string& name) const {
-    std::shared_lock<std::shared_mutex> lock(counters_mutex_);
-    auto it = counters_.find(name);
-    if (it != counters_.end()) {
-        return it->second->value.load(std::memory_order_acquire);
-    }
-    return 0.0;
-}
-
-// Gauge operations
-void Metrics::set_gauge(const std::string& name, double value) {
-    auto* gauge = get_or_create_gauge(name);
-    if (gauge) {
-        gauge->value.store(value, std::memory_order_release);
-    }
-}
-
-double Metrics::get_gauge(const std::string& name) const {
-    std::shared_lock<std::shared_mutex> lock(gauges_mutex_);
-    auto it = gauges_.find(name);
-    if (it != gauges_.end()) {
-        return it->second->value.load(std::memory_order_acquire);
-    }
-    return 0.0;
-}
-
-// Histogram operations
-void Metrics::record_histogram(const std::string& name, double value) {
-    auto* hist = get_or_create_histogram(name);
-    if (hist) {
-        // Update sum atomically
-        double old_sum = hist->sum.load(std::memory_order_relaxed);
-        while (!hist->sum.compare_exchange_weak(old_sum, old_sum + value,
-                                                  std::memory_order_release,
-                                                  std::memory_order_relaxed)) {}
-        
-        // Increment count
-        hist->count.fetch_add(1, std::memory_order_release);
-        
-        // Update min/max using atomic compare-exchange
-        double old_min = hist->min.load(std::memory_order_relaxed);
-        while (value < old_min && 
-               !hist->min.compare_exchange_weak(old_min, value,
-                                                 std::memory_order_release,
-                                                 std::memory_order_relaxed)) {}
-        
-        double old_max = hist->max.load(std::memory_order_relaxed);
-        while (value > old_max &&
-               !hist->max.compare_exchange_weak(old_max, value,
-                                                 std::memory_order_release,
-                                                 std::memory_order_relaxed)) {}
-    }
-}
-
-// Prometheus export
-std::string Metrics::export_prometheus() const {
+std::string MetricsCollector::to_json() const {
     std::ostringstream oss;
     oss << std::fixed << std::setprecision(6);
     
-    // Export counters
-    {
-        std::shared_lock<std::shared_mutex> lock(counters_mutex_);
-        for (const auto& [name, data] : counters_) {
-            oss << "# TYPE " << name << " counter\n";
-            oss << name << " " << data->value.load(std::memory_order_acquire) << "\n";
-        }
-    }
+    auto now = std::chrono::steady_clock::now();
+    auto uptime_s = std::chrono::duration_cast<std::chrono::seconds>(
+        now - start_time_).count();
     
-    // Export gauges
-    {
-        std::shared_lock<std::shared_mutex> lock(gauges_mutex_);
-        for (const auto& [name, data] : gauges_) {
-            oss << "# TYPE " << name << " gauge\n";
-            oss << name << " " << data->value.load(std::memory_order_acquire) << "\n";
-        }
-    }
-    
-    // Export histograms
-    {
-        std::shared_lock<std::shared_mutex> lock(histograms_mutex_);
-        for (const auto& [name, data] : histograms_) {
-            size_t count = data->count.load(std::memory_order_acquire);
-            if (count > 0) {
-                double sum = data->sum.load(std::memory_order_acquire);
-                double min = data->min.load(std::memory_order_acquire);
-                double max = data->max.load(std::memory_order_acquire);
-                double avg = sum / count;
-                
-                oss << "# TYPE " << name << " summary\n";
-                oss << name << "_sum " << sum << "\n";
-                oss << name << "_count " << count << "\n";
-                oss << name << "_avg " << avg << "\n";
-                oss << name << "_min " << min << "\n";
-                oss << name << "_max " << max << "\n";
-            }
-        }
-    }
+    oss << "{\n";
+    oss << "  \"uptime_seconds\": " << uptime_s << ",\n";
+    oss << "  \"collapses_total\": " << collapses_total_.load(std::memory_order_relaxed) << ",\n";
+    oss << "  \"collapse_rate_hz\": " << get_collapse_rate_hz() << ",\n";
+    oss << "  \"entropy_current\": " << entropy_current_.load(std::memory_order_relaxed) << ",\n";
+    oss << "  \"dwell_overruns_total\": " << dwell_overruns_total_.load(std::memory_order_relaxed) << ",\n";
+    oss << "  \"steps_total\": " << steps_total_.load(std::memory_order_relaxed) << ",\n";
+    oss << "  \"last_step_latency_us\": " << last_step_latency_us_.load(std::memory_order_relaxed) << "\n";
+    oss << "}";
     
     return oss.str();
 }
 
-void Metrics::reset() {
-    {
-        std::unique_lock<std::shared_mutex> lock(counters_mutex_);
-        counters_.clear();
-    }
-    {
-        std::unique_lock<std::shared_mutex> lock(gauges_mutex_);
-        gauges_.clear();
-    }
-    {
-        std::unique_lock<std::shared_mutex> lock(histograms_mutex_);
-        histograms_.clear();
-    }
+std::string MetricsCollector::to_prometheus() const {
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(6);
+    
+    auto now = std::chrono::steady_clock::now();
+    auto uptime_s = std::chrono::duration_cast<std::chrono::seconds>(
+        now - start_time_).count();
+    
+    // Counter metrics
+    oss << "# HELP hab_collapses_total Total number of quantum collapses\n";
+    oss << "# TYPE hab_collapses_total counter\n";
+    oss << "hab_collapses_total " << collapses_total_.load(std::memory_order_relaxed) << "\n";
+    
+    oss << "# HELP hab_dwell_overruns_total Total number of dwell time overruns\n";
+    oss << "# TYPE hab_dwell_overruns_total counter\n";
+    oss << "hab_dwell_overruns_total " << dwell_overruns_total_.load(std::memory_order_relaxed) << "\n";
+    
+    oss << "# HELP hab_steps_total Total number of processing steps\n";
+    oss << "# TYPE hab_steps_total counter\n";
+    oss << "hab_steps_total " << steps_total_.load(std::memory_order_relaxed) << "\n";
+    
+    // Gauge metrics
+    oss << "# HELP hab_entropy_current Current system entropy\n";
+    oss << "# TYPE hab_entropy_current gauge\n";
+    oss << "hab_entropy_current " << entropy_current_.load(std::memory_order_relaxed) << "\n";
+    
+    oss << "# HELP hab_collapse_rate_hz Collapse rate in Hz\n";
+    oss << "# TYPE hab_collapse_rate_hz gauge\n";
+    oss << "hab_collapse_rate_hz " << get_collapse_rate_hz() << "\n";
+    
+    oss << "# HELP hab_last_step_latency_us Last step latency in microseconds\n";
+    oss << "# TYPE hab_last_step_latency_us gauge\n";
+    oss << "hab_last_step_latency_us " << last_step_latency_us_.load(std::memory_order_relaxed) << "\n";
+    
+    oss << "# HELP hab_uptime_seconds System uptime in seconds\n";
+    oss << "# TYPE hab_uptime_seconds counter\n";
+    oss << "hab_uptime_seconds " << uptime_s << "\n";
+    
+    return oss.str();
 }
 
-// Predefined metrics
-void Metrics::record_entropy(double value) {
-    set_gauge("brain_qw_entropy", value);
-    record_histogram("brain_qw_entropy_hist", value);
-}
-
-void Metrics::record_trace_error(double value) {
-    set_gauge("brain_qw_trace_error", value);
-    record_histogram("brain_qw_trace_error_hist", value);
-}
-
-void Metrics::record_collapse() {
-    increment_counter("brain_qw_collapses_total", 1.0);
-}
-
-void Metrics::record_gw_sparsity(double value) {
-    set_gauge("brain_gw_sparsity", value);
-}
-
-void Metrics::record_wiring_energy(double value) {
-    set_gauge("brain_wiring_energy", value);
-}
-
-void Metrics::record_step_latency(double value) {
-    record_histogram("brain_step_latency_seconds", value);
-}
-
-// Helper methods to get or create metrics
-Metrics::CounterData* Metrics::get_or_create_counter(const std::string& name) {
-    // Try read-only access first (fast path)
-    {
-        std::shared_lock<std::shared_mutex> lock(counters_mutex_);
-        auto it = counters_.find(name);
-        if (it != counters_.end()) {
-            return it->second.get();
-        }
+double MetricsCollector::get_collapse_rate_hz() const {
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed_s = std::chrono::duration_cast<std::chrono::duration<double>>(
+        now - start_time_).count();
+    
+    if (elapsed_s < 1e-6) {
+        return 0.0;
     }
     
-    // Acquire write lock to create (slow path)
-    std::unique_lock<std::shared_mutex> lock(counters_mutex_);
-    // Double-check after acquiring write lock (another thread may have created it)
-    auto it = counters_.find(name);
-    if (it != counters_.end()) {
-        return it->second.get();
-    }
-    
-    auto counter = std::make_unique<CounterData>();
-    auto* ptr = counter.get();
-    counters_[name] = std::move(counter);
-    return ptr;
-}
-
-Metrics::GaugeData* Metrics::get_or_create_gauge(const std::string& name) {
-    {
-        std::shared_lock<std::shared_mutex> lock(gauges_mutex_);
-        auto it = gauges_.find(name);
-        if (it != gauges_.end()) {
-            return it->second.get();
-        }
-    }
-    
-    std::unique_lock<std::shared_mutex> lock(gauges_mutex_);
-    auto it = gauges_.find(name);
-    if (it != gauges_.end()) {
-        return it->second.get();
-    }
-    
-    auto gauge = std::make_unique<GaugeData>();
-    auto* ptr = gauge.get();
-    gauges_[name] = std::move(gauge);
-    return ptr;
-}
-
-Metrics::HistogramData* Metrics::get_or_create_histogram(const std::string& name) {
-    {
-        std::shared_lock<std::shared_mutex> lock(histograms_mutex_);
-        auto it = histograms_.find(name);
-        if (it != histograms_.end()) {
-            return it->second.get();
-        }
-    }
-    
-    std::unique_lock<std::shared_mutex> lock(histograms_mutex_);
-    auto it = histograms_.find(name);
-    if (it != histograms_.end()) {
-        return it->second.get();
-    }
-    
-    auto hist = std::make_unique<HistogramData>();
-    auto* ptr = hist.get();
-    histograms_[name] = std::move(hist);
-    return ptr;
+    int64_t total = collapses_total_.load(std::memory_order_relaxed);
+    return static_cast<double>(total) / elapsed_s;
 }
 
 } // namespace hab

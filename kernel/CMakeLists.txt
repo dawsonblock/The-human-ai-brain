@@ -1,10 +1,21 @@
 # Core library source files
 file(GLOB CORE_SRCS src/*.cpp)
-# Exclude brain_service.cpp - that's for server only
+# Exclude brain_service.cpp and metrics.cpp - those are separate libraries
 list(FILTER CORE_SRCS EXCLUDE REGEX ".*brain_service\\.cpp$")
+list(FILTER CORE_SRCS EXCLUDE REGEX ".*metrics\\.cpp$")
+
+# Ensure config_validate.cpp is included (it should be in brain_core)
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/config_validate.cpp")
+    message(WARNING "config_validate.cpp not found - configuration validation will not be available")
+endif()
 
 # Brain core library
 add_library(brain_core STATIC ${CORE_SRCS})
+
+# Metrics library (for observability)
+add_library(brain_metrics STATIC src/metrics.cpp)
+target_include_directories(brain_metrics PUBLIC include)
+target_link_libraries(brain_metrics PUBLIC brain_core)
 
 target_include_directories(brain_core
     PUBLIC
@@ -92,6 +103,7 @@ if(BUILD_GRPC_SERVER)
     target_link_libraries(brain_server PRIVATE
         brain_core
         brain_proto
+        brain_metrics
     )
     
     install(TARGETS brain_server DESTINATION bin)
@@ -105,25 +117,25 @@ install(TARGETS interactive_demo DESTINATION bin)
 # Testing
 if(BUILD_TESTS)
     enable_testing()
+    include(GoogleTest)
     
     add_executable(minimal_test tests/minimal_test.cpp)
-    target_link_libraries(minimal_test PRIVATE brain_core GTest::gtest)
+    target_link_libraries(minimal_test PRIVATE brain_core GTest::gtest GTest::gtest_main)
     add_test(NAME minimal_tests COMMAND minimal_test)
+    gtest_discover_tests(minimal_test)
     
     add_executable(qw_tests tests/qw_tests.cpp)
     target_link_libraries(qw_tests PRIVATE brain_core GTest::gtest GTest::gtest_main)
     add_test(NAME qw_physics_tests COMMAND qw_tests)
+    gtest_discover_tests(qw_tests)
     
     add_executable(cognitive_tests tests/cognitive_tests.cpp)
     target_link_libraries(cognitive_tests PRIVATE brain_core GTest::gtest GTest::gtest_main)
     add_test(NAME cognitive_modules_tests COMMAND cognitive_tests)
+    gtest_discover_tests(cognitive_tests)
     
     add_executable(brain_system_tests tests/brain_system_tests.cpp)
     target_link_libraries(brain_system_tests PRIVATE brain_core GTest::gtest GTest::gtest_main)
     add_test(NAME unified_brain_system_tests COMMAND brain_system_tests)
-    
-    gtest_discover_tests(minimal_test)
-    gtest_discover_tests(qw_tests)
-    gtest_discover_tests(cognitive_tests)
     gtest_discover_tests(brain_system_tests)
 endif()

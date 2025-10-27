@@ -1,19 +1,38 @@
-# Quantum Workspace Configuration
-dimension: 7
-dt: 0.001
-entropy_cap: logN  # Will be computed as log(dimension)
-decoherence_rate: 1.0e-8
-trace_tolerance: 1.0e-10
-eigenvalue_floor: 1.0e-12
-max_dwell_ms: 120
-rng_seed: 42
+# Quantum Workspace Configuration (v3.2.0)
+# Updated: Replaced entropy_cap with entropy_threshold for clearer semantics
 
-# Lindblad operators configuration
+quantum:
+  dimension: 7
+  dt: 0.01  # 10ms timestep
+  decoherence_rate: 0.05
+  entropy_threshold: 1.9459  # ln(7) - computed value for collapse trigger
+  max_dwell_ms: 120.0
+  collapse_rate_target_hz: 8.2
+
+  # Advanced physics parameters
+  trace_tolerance: 1.0e-10
+  eigenvalue_floor: 1.0e-12
+  rng_seed: 42
+
+# Global Workspace Configuration
+global_workspace:
+  dimension: 60
+  top_k: 12
+  learning_rate: 0.001
+  sparsity_target: 0.2
+
+# Memory System Configuration
+memory:
+  stm_capacity: 20
+  ltm_capacity: 1000
+  consolidation_threshold: 0.7
+
+# Lindblad Operators Configuration
 lindblad:
   num_operators: 3
   coupling_strength: 0.01
 
-# Collapse configuration
+# Collapse Configuration
 collapse:
   method: "projective"  # projective, soft, gumbel
   temperature: 0.1      # for soft collapse

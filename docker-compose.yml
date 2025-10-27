@@ -7,58 +7,117 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runtime
-    image: brain-fdqc:latest
-    container_name: brain-server
+    container_name: brain-grpc-server
     ports:
       - "50051:50051"
     volumes:
-      - ./checkpoints:/data/checkpoints
-      - ./data:/data
+      - ./configs:/app/configs:ro
+      - brain-data:/app/data
     environment:
-      - SERVER_ADDRESS=0.0.0.0:50051
-      - LOG_LEVEL=INFO
+      - QUANTUM_CONFIG=/app/configs/quantum.yaml
+      - LOG_LEVEL=info
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/50051 && exec 3>&- 3<&- || exit 1'"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
     networks:
       - brain-network
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
-  # Python Client (for testing)
-  brain-client:
+  # Development environment
+  brain-dev:
     build:
       context: .
       dockerfile: Dockerfile
       target: development
-    image: brain-fdqc:dev
-    container_name: brain-client
-    depends_on:
-      - brain-server
-    command: python3 /workspace/test_client.py
-    environment:
-      - BRAIN_SERVER_ADDRESS=brain-server:50051
+    container_name: brain-dev
+    volumes:
+      - .:/workspace:cached
+      - brain-build-cache:/workspace/build
+    working_dir: /workspace
+    command: /bin/bash
+    stdin_open: true
+    tty: true
     networks:
       - brain-network
+    profiles:
+      - dev
 
-  # Prometheus (optional - for metrics)
+  # Cockpit Safety Monitor
+  cockpit-monitor:
+    build:
+      context: ./Cockpit-main
+      dockerfile: Dockerfile
+    container_name: cockpit-safety-monitor
+    volumes:
+      - ./Cockpit-main/config:/app/config:ro
+      - cockpit-audit:/app/audit
+    environment:
+      - COCKPIT_EVOLVE=on
+      - EXPLAIN_POLICY=strict
+      - KILL_SWITCH_PATH=/app/kill_switch
+    restart: unless-stopped
+    networks:
+      - brain-network
+    profiles:
+      - full
+
+  # Document Ingestion Pipeline
+  ingest-service:
+    build:
+      context: ./ingest_cpp
+      dockerfile: Dockerfile
+    container_name: ingest-pipeline
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./ingest_cpp/config:/app/config:ro
+      - ingest-documents:/app/documents
+      - ingest-index:/app/index
+    environment:
+      - EMBED_SERVICE_URL=http://embed-service:8081
+      - INDEX_PATH=/app/index
+    restart: unless-stopped
+    networks:
+      - brain-network
+    profiles:
+      - full
+
+  # Embedding Service (for RAG)
+  embed-service:
+    image: sentence-transformers/all-MiniLM-L6-v2
+    container_name: embedding-service
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    networks:
+      - brain-network
+    profiles:
+      - full
+
+  # Prometheus Metrics
   prometheus:
     image: prom/prometheus:latest
     container_name: brain-prometheus
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    restart: unless-stopped
     networks:
       - brain-network
+    profiles:
+      - monitoring
 
-  # Grafana (optional - for visualization)
+  # Grafana Dashboard
   grafana:
     image: grafana/grafana:latest
     container_name: brain-grafana
@@ -66,41 +125,37 @@ services:
       - "3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./configs/grafana:/etc/grafana/provisioning:ro
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
-    depends_on:
-      - prometheus
+    restart: unless-stopped
     networks:
       - brain-network
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
 
 networks:
   brain-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
 
 volumes:
+  brain-data:
+    driver: local
+  brain-build-cache:
+    driver: local
+  cockpit-audit:
+    driver: local
+  ingest-documents:
+    driver: local
+  ingest-index:
+    driver: local
   prometheus-data:
+    driver: local
   grafana-data:
-
-# ============================================================================
-# Usage:
-#
-# Start all services:
-#   docker-compose up -d
-#
-# Start only server:
-#   docker-compose up -d brain-server
-#
-# View logs:
-#   docker-compose logs -f brain-server
-#
-# Run test client:
-#   docker-compose run --rm brain-client
-#
-# Stop all:
-#   docker-compose down
-#
-# Rebuild:
-#   docker-compose build
-# ============================================================================
+    driver: local

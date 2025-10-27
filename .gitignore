@@ -1,1 +1,93 @@
-build/
+# Generated protobuf/gRPC code
+**/*.pb.cc
+**/*.pb.h
+**/*_grpc.pb.cc
+**/*_grpc.pb.h
+**/proto/*.pb.cc
+**/proto/*.pb.h
+
+# Build directories
+/build/
+/dist/
+**/build/
+**/dist/
+
+# Archives
+/*.zip
+/**/*.zip
+!third_party/*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.clangd/
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+CTestTestfile.cmake
+compile_commands.json
+
+# Compiled binaries
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+*.out
+brain_server
+brain_service
+interactive_demo
+minimal_test
+qw_tests
+cognitive_tests
+brain_system_tests
+cockpit_tests
+
+# Test artifacts
+Testing/
+*.log
+*.tmp
+
+# Ingest pipeline artifacts
+*.pid
+core
+test_chunker
+test_pdf_render
+
+# Documentation build
+docs/_build/
+docs/.doctrees/
+
+# Temporary files
+*.bak
+*.orig
+*.rej
+*~
+.*.sw[op]

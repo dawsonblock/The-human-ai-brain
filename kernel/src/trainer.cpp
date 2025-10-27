@@ -582,6 +582,8 @@ TrainingMetrics BrainTrainer::evaluate(Dataset& dataset) {
 
 // Loss functions
 namespace loss {
+    using hab::Scalar;
+    
     Scalar mse_loss(const Eigen::VectorXd& pred, const Eigen::VectorXd& target) {
         return (pred - target).squaredNorm() / pred.size();
     }
@@ -615,6 +617,8 @@ namespace loss {
 
 // RL utilities
 namespace rl {
+    using hab::Scalar;
+    
     Scalar compute_return(const std::vector<Scalar>& rewards, Scalar gamma) {
         Scalar G = 0.0;
         for (int t = rewards.size() - 1; t >= 0; --t) {
@@ -629,9 +633,10 @@ namespace rl {
         std::vector<Scalar> advantages(rewards.size());
         Scalar advantage = 0.0;
         
-        for (int t = rewards.size() - 1; t >= 0; --t) {
+        for (size_t i = 0; i < rewards.size(); ++i) {
+            size_t t = rewards.size() - 1 - i;
             Scalar delta = rewards[t] - values[t];
-            if (t < static_cast<int>(rewards.size()) - 1) {
+            if (t < rewards.size() - 1) {
                 delta += gamma * values[t + 1];
             }
             advantage = delta + gamma * advantage;

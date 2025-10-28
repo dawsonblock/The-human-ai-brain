@@ -1,0 +1,99 @@
+# ==========================================
+# Stage 1: Builder
+# ==========================================
+FROM ubuntu:22.04 AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    ninja-build \
+    libssl-dev \
+    libprotobuf-dev \
+    protobuf-compiler \
+    grpc++ \
+    libgrpc++-dev \
+    protobuf-compiler-grpc \
+    libeigen3-dev \
+    libpoppler-cpp-dev \
+    libcurl4-openssl-dev \
+    pkg-config \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Copy source code
+COPY . .
+
+# Configure and build with production optimizations
+RUN cmake -B build \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTS=OFF \
+    -DBUILD_GRPC_SERVER=ON \
+    -DENABLE_OPENMP=ON \
+    -G Ninja && \
+    cmake --build build --config Release -j$(nproc)
+
+# ==========================================
+# Stage 2: Runtime
+# ==========================================
+FROM ubuntu:22.04 AS runtime
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    libssl3 \
+    libprotobuf23 \
+    libgrpc++1.43 \
+    libpoppler-cpp0v5 \
+    libcurl4 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -r -u 65534 -g nogroup brain-user
+
+# Create necessary directories
+RUN mkdir -p /app/config /app/data /app/logs /app/security && \
+    chown -R brain-user:nogroup /app
+
+WORKDIR /app
+
+# Copy binaries from builder
+COPY --from=builder --chown=brain-user:nogroup /build/build/kernel/brain_server /app/
+COPY --from=builder --chown=brain-user:nogroup /build/build/kernel/interactive_demo /app/
+
+# Copy security profile
+COPY --chown=brain-user:nogroup security/seccomp-profile.json /app/security/
+
+# Copy example configurations
+COPY --chown=brain-user:nogroup configs/quantum.yaml /app/config/ 2>/dev/null || true
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:9090/health || exit 1
+
+# Expose ports
+EXPOSE 50051 9090
+
+# Switch to non-root user
+USER brain-user:nogroup
+
+# Make filesystem read-only (except specific directories)
+# This is enforced at runtime with --read-only flag
+
+# Environment variables
+ENV BRAIN_CONFIG=/app/config/quantum.yaml \
+    BRAIN_LOG_LEVEL=info \
+    BRAIN_METRICS_PORT=9090 \
+    BRAIN_GRPC_PORT=50051
+
+# Default command
+CMD ["/app/brain_server"]
+
+# Labels
+LABEL org.opencontainers.image.title="Human-AI Brain System" \
+      org.opencontainers.image.description="Production quantum consciousness simulation with gRPC and Prometheus metrics" \
+      org.opencontainers.image.version="3.4.0" \
+      org.opencontainers.image.vendor="Human-AI Brain Project" \
+      org.opencontainers.image.source="https://github.com/dawsonblock/The-human-ai-brain"

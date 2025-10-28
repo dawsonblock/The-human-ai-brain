@@ -1,39 +1,47 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: brain-server
+  name: brain-system
+  namespace: brain-prod
   labels:
-    app: brain-fdqc
-    component: server
-    version: v3.1.0
+    app: brain-system
+    version: v3.4.0
+    component: core
 spec:
   replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
-      app: brain-fdqc
-      component: server
+      app: brain-system
   template:
     metadata:
       labels:
-        app: brain-fdqc
-        component: server
-        version: v3.1.0
+        app: brain-system
+        version: v3.4.0
+        component: core
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: Localhost
+          localhostProfile: brain-seccomp.json
+      
       containers:
       - name: brain-server
-        image: brain-fdqc@sha256:<<IMAGE_DIGEST>>
+        image: ghcr.io/dawsonblock/the-human-ai-brain/brain:v3.4.0
         imagePullPolicy: IfNotPresent
-        securityContext:
-          runAsNonRoot: true
-          runAsUser: 10001
-          runAsGroup: 10001
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop: ["ALL"]
+        
         ports:
         - name: grpc
           containerPort: 50051
@@ -41,54 +49,86 @@ spec:
         - name: metrics
           containerPort: 9090
           protocol: TCP
+        
         env:
-        - name: SERVER_ADDRESS
-          value: "0.0.0.0:50051"
-        - name: LOG_LEVEL
-          value: "INFO"
-        - name: CHECKPOINT_DIR
-          value: "/data/checkpoints"
+        - name: BRAIN_CONFIG
+          value: /app/config/quantum.yaml
+        - name: BRAIN_LOG_LEVEL
+          value: info
+        - name: BRAIN_METRICS_PORT
+          value: "9090"
+        - name: BRAIN_GRPC_PORT
+          value: "50051"
+        - name: CONFIG_SIGNATURE_REQUIRED
+          valueFrom:
+            configMapKeyRef:
+              name: brain-config
+              key: signature_required
+              optional: true
+        - name: SECCOMP_ENABLED
+          value: "1"
+        - name: KILL
+          valueFrom:
+            configMapKeyRef:
+              name: brain-config
+              key: kill_switch
+              optional: true
+        
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "250m"
+            cpu: 500m
+            memory: 512Mi
           limits:
-            memory: "1Gi"
-            cpu: "1000m"
-        volumeMounts:
-        - name: checkpoint-storage
-          mountPath: /data/checkpoints
-        - name: data-storage
-          mountPath: /data
-        - name: tmp
-          mountPath: /tmp
+            cpu: 2000m
+            memory: 2Gi
+        
         livenessProbe:
-          exec:
-            command:
-            - /bin/sh
-            - -c
-            - grpc_health_probe -addr=127.0.0.1:50051 || exit 1
+          httpGet:
+            path: /health
+            port: metrics
           initialDelaySeconds: 10
           periodSeconds: 30
-          timeoutSeconds: 3
+          timeoutSeconds: 5
           failureThreshold: 3
+        
         readinessProbe:
-          exec:
-            command:
-            - /bin/grpc_health_probe
-            - -addr=127.0.0.1:50051
-            - -rpc-timeout=2s
+          httpGet:
+            path: /health
+            port: metrics
           initialDelaySeconds: 5
           periodSeconds: 10
-          timeoutSeconds: 3
+          timeoutSeconds: 5
           failureThreshold: 3
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop:
+              - ALL
+        
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      
       volumes:
-      - name: checkpoint-storage
-        persistentVolumeClaim:
-          claimName: brain-checkpoint-pvc
-      - name: data-storage
-        persistentVolumeClaim:
-          claimName: brain-data-pvc
+      - name: config
+        configMap:
+          name: brain-config
+      - name: tmp
+        emptyDir:
+          sizeLimit: 100Mi
+      - name: logs
+        emptyDir:
+          sizeLimit: 1Gi
+      
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -99,5 +139,7 @@ spec:
                 - key: app
                   operator: In
                   values:
-                  - brain-fdqc
+                  - brain-system
               topologyKey: kubernetes.io/hostname
+      
+      terminationGracePeriodSeconds: 30

@@ -9,14 +9,19 @@ namespace hab {
 
 // Quantum Workspace Configuration
 struct QWConfig {
-    int dimension = 7;              // Hilbert space dimension
-    Scalar dt = 0.001;              // Time step (seconds)
-    Scalar entropy_cap = 1.945;     // log(7), collapse threshold
-    Scalar decoherence_rate = 1e-8; // Lindblad decoherence
-    Scalar trace_tol = 1e-10;       // Trace preservation tolerance
-    Scalar eigen_floor = 1e-12;     // Eigenvalue floor for PSD
-    int max_dwell_ms = 120;         // Max time in superposition
-    int rng_seed = 42;              // Reproducibility
+    int dimension = 7;                       // Hilbert space dimension
+    Scalar dt = 0.01;                        // Time step (seconds)
+    Scalar entropy_threshold = 1.9459;       // ln(7), collapse threshold (renamed from entropy_cap)
+    Scalar decoherence_rate = 0.05;          // Lindblad decoherence rate
+    Scalar trace_tolerance = 1e-10;          // Trace preservation tolerance (renamed from trace_tol)
+    Scalar eigenvalue_floor = 1e-12;         // Eigenvalue floor for PSD (renamed from eigen_floor)
+    Scalar max_dwell_ms = 120.0;             // Max time in superposition (ms)
+    Scalar collapse_rate_target_hz = 8.2;    // Target collapse rate (Hz) - EEG alpha rhythm
+    int rng_seed = 42;                       // Reproducibility
+    
+    // Validation method
+    bool validate() const;
+    std::string validation_error() const;
 };
 
 // Quantum state representation
@@ -44,6 +49,9 @@ public:
     // Main evolution step
     void step_ticks(int num_ticks);
     
+    // Evolution with metrics collection (for production monitoring)
+    void step_ticks_with_metrics(int num_ticks);
+    
     // Project from global workspace
     void project_from_gw(const Eigen::VectorXd& gw_state);
     
@@ -59,6 +67,9 @@ public:
     
     // Reset to uniform superposition
     void reset();
+    
+    // Enable multi-threading for Eigen operations
+    void enable_threading(int num_threads = -1);
     
     // Debug: Get simulation time
     Scalar sim_time() const { return sim_time_; }

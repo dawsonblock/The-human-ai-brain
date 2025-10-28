@@ -27,9 +27,17 @@ target_include_directories(brain_core
 
 target_compile_options(brain_core PRIVATE
     -Wall -Wextra -Wpedantic
-    $<$<CONFIG:Release>:-O3>
+    $<$<CONFIG:Release>:-O3 -DNDEBUG -flto -march=native -ffast-math>
     $<$<CONFIG:Debug>:-g -O0>
 )
+
+# Check for AVX2 support
+include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-mavx2" COMPILER_SUPPORTS_AVX2)
+if(COMPILER_SUPPORTS_AVX2)
+    target_compile_definitions(brain_core PRIVATE HAS_AVX2)
+    message(STATUS "AVX2 support detected - enabling SIMD optimizations")
+endif()
 
 target_link_libraries(brain_core
     PUBLIC
@@ -39,6 +47,24 @@ target_link_libraries(brain_core
 
 if(ENABLE_OPENMP AND OpenMP_CXX_FOUND)
     target_link_libraries(brain_core PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
+# Benchmark and test tools
+if(BUILD_TESTS)
+    # Performance benchmark
+    add_executable(bench_entropy ${CMAKE_SOURCE_DIR}/tools/bench_entropy.cpp)
+    target_link_libraries(bench_entropy PRIVATE brain_core)
+    target_include_directories(bench_entropy PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    
+    # Metrics validation tool
+    add_executable(test_metrics ${CMAKE_SOURCE_DIR}/tools/test_metrics.cpp)
+    target_link_libraries(test_metrics PRIVATE brain_core)
+    target_include_directories(test_metrics PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    
+    # Security features validation tool
+    add_executable(test_security ${CMAKE_SOURCE_DIR}/tools/test_security.cpp)
+    target_link_libraries(test_security PRIVATE brain_core)
+    target_include_directories(test_security PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 endif()
 
 # Installation

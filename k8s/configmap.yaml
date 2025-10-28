@@ -2,30 +2,46 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: brain-config
+  namespace: brain-prod
   labels:
-    app: brain-fdqc
+    app: brain-system
 data:
-  server.conf: |
-    server_address: "0.0.0.0:50051"
-    log_level: "INFO"
+  quantum.yaml: |
+    quantum_workspace:
+      dimension: 7
+      dt: 0.01
+      entropy_threshold: 1.9459
+      decoherence_rate: 0.05
+      trace_tolerance: 1e-10
+      eigenvalue_floor: 1e-12
+      max_dwell_ms: 120.0
+      collapse_rate_target_hz: 8.2
+      rng_seed: 42
     
-    # Brain Configuration
-    input_dim: 784
-    gw_output_dim: 60
-    qw_dimension: 7
-    entropy_cap: 1.94591
-    max_dwell_ms: 120
+    tiered_memory:
+      hot:
+        capacity: 50000
+        consolidation_threshold: 0.7
+      warm:
+        capacity: 300000
+        consolidation_threshold: 0.5
+      cold:
+        capacity: 2000000
+        consolidation_threshold: 0.3
+      deduplication:
+        enabled: true
+        num_hashes: 128
+      temporal_decay:
+        half_life_days: 30.0
+        floor: 0.01
     
-    # Memory Configuration
-    stm_capacity: 20
-    ltm_capacity: 1000
+    grpc:
+      port: 50051
+      max_workers: 10
     
-    # Training Configuration
-    learning_rate: 0.001
-    batch_size: 32
-    num_epochs: 10
-    
-    # Checkpointing
-    enable_checkpoints: true
-    checkpoint_interval: 1
-    checkpoint_dir: "/data/checkpoints"
+    metrics:
+      enabled: true
+      port: 9090
+  
+  signature_required: "0"
+  kill_switch: "0"

@@ -1,59 +1,44 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: brain-server
+  name: brain-system-grpc
+  namespace: brain-prod
   labels:
-    app: brain-fdqc
-    component: server
+    app: brain-system
+    component: core
 spec:
-  type: LoadBalancer
-  externalTrafficPolicy: Local
-  ipFamilies:
-  - IPv4
-  ipFamilyPolicy: SingleStack
+  type: ClusterIP
+  selector:
+    app: brain-system
   ports:
   - name: grpc
     port: 50051
-    targetPort: 50051
+    targetPort: grpc
     protocol: TCP
-    appProtocol: grpc
-  selector:
-    app: brain-fdqc
-    component: server
-  sessionAffinity: None
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: brain-server-metrics
+  name: brain-system-metrics
+  namespace: brain-prod
   labels:
-    app: brain-fdqc
-    component: server
+    app: brain-system
+    component: metrics
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
 spec:
   type: ClusterIP
+  selector:
+    app: brain-system
   ports:
   - name: metrics
     port: 9090
-    targetPort: 9090
+    targetPort: metrics
     protocol: TCP
-  selector:
-    app: brain-fdqc
-    component: server
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: brain-server-headless
-  labels:
-    app: brain-fdqc
-    component: server
-spec:
-  clusterIP: None
-  ports:
-  - name: grpc
-    port: 50051
-    targetPort: 50051
-    protocol: TCP
-  selector:
-    app: brain-fdqc
-    component: server

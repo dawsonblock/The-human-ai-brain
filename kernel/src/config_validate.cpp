@@ -72,35 +72,35 @@ ValidationResult validate_quantum_config(const QWConfig& config) {
                                   " is very high, quantum effects may be minimal");
     }
     
-    // Entropy cap/threshold validation
+    // Entropy threshold validation
     double max_entropy = std::log(static_cast<double>(config.dimension));
-    if (config.entropy_cap > max_entropy * 1.1) {
-        result.errors.push_back("entropy_cap " + std::to_string(config.entropy_cap) + 
+    if (config.entropy_threshold > max_entropy * 1.1) {
+        result.errors.push_back("entropy_threshold " + std::to_string(config.entropy_threshold) + 
                                " exceeds max possible " + std::to_string(max_entropy) +
                                " by more than 10%");
         result.valid = false;
     }
-    if (config.entropy_cap < 0.0) {
-        result.errors.push_back("entropy_cap must be non-negative, got " + 
-                               std::to_string(config.entropy_cap));
+    if (config.entropy_threshold < 0.0) {
+        result.errors.push_back("entropy_threshold must be non-negative, got " + 
+                               std::to_string(config.entropy_threshold));
         result.valid = false;
     }
-    if (config.entropy_cap < max_entropy * 0.5) {
-        result.warnings.push_back("entropy_cap " + std::to_string(config.entropy_cap) + 
+    if (config.entropy_threshold < max_entropy * 0.5) {
+        result.warnings.push_back("entropy_threshold " + std::to_string(config.entropy_threshold) + 
                                   " is less than 50% of max, may collapse too frequently");
     }
     
     // Trace tolerance validation
-    if (config.trace_tol <= 0.0 || config.trace_tol > 1e-3) {
-        result.errors.push_back("trace_tol must be in range (0, 1e-3], got " + 
-                               std::to_string(config.trace_tol));
+    if (config.trace_tolerance <= 0.0 || config.trace_tolerance > 1e-3) {
+        result.errors.push_back("trace_tolerance must be in range (0, 1e-3], got " + 
+                               std::to_string(config.trace_tolerance));
         result.valid = false;
     }
     
     // Eigenvalue floor validation
-    if (config.eigen_floor <= 0.0 || config.eigen_floor > 1e-6) {
-        result.errors.push_back("eigen_floor must be in range (0, 1e-6], got " + 
-                               std::to_string(config.eigen_floor));
+    if (config.eigenvalue_floor <= 0.0 || config.eigenvalue_floor > 1e-6) {
+        result.errors.push_back("eigenvalue_floor must be in range (0, 1e-6], got " + 
+                               std::to_string(config.eigenvalue_floor));
         result.valid = false;
     }
     

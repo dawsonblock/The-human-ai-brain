@@ -1,4 +1,5 @@
 #include "brain/tiered_memory.hpp"
+#include "brain/simple_metrics.hpp"
 #include <algorithm>
 #include <cmath>
 #include <random>
@@ -288,10 +289,18 @@ bool TieredLTM::add(const MemoryItem& item) {
     stats_.hot_count.fetch_add(1, std::memory_order_relaxed);
     stats_.total_count.fetch_add(1, std::memory_order_relaxed);
     
+    // Update metrics
+    METRIC_GAUGE("memory_hot_tier_size", stats_.hot_count.load());
+    METRIC_GAUGE("memory_warm_tier_size", stats_.warm_count.load());
+    METRIC_GAUGE("memory_cold_tier_size", stats_.cold_count.load());
+    METRIC_GAUGE("memory_total_items", stats_.total_count.load());
+    
     return true;
 }
 
 RetrievalResult TieredLTM::retrieve(const Eigen::VectorXd& query, int k) {
+    METRIC_TIMER("memory_retrieve_latency_ms");
+    
     if (query.size() == 0) {
         throw std::invalid_argument("Query vector cannot be empty");
     }
@@ -315,6 +324,7 @@ RetrievalResult TieredLTM::retrieve(const Eigen::VectorXd& query, int k) {
                 result.items.push_back(item);
                 result.scores.push_back(score);
                 result.tiers.push_back("hot");
+                METRIC_COUNTER("memory_hot_tier_hits_total", 1.0);
             }
         }
     }
@@ -332,6 +342,7 @@ RetrievalResult TieredLTM::retrieve(const Eigen::VectorXd& query, int k) {
                     result.items.push_back(item);
                     result.scores.push_back(score);
                     result.tiers.push_back("warm");
+                    METRIC_COUNTER("memory_warm_tier_hits_total", 1.0);
                 }
             }
         }

@@ -13,10 +13,25 @@ on:
   push:
     branches: [ "main" ]
   pull_request:
-    # The branches below must be a subset of the branches above
     branches: [ "main" ]
   schedule:
     - cron: '34 12 * * 6'
+jobs:
+  build:
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Black Duck SCA scan
+        timeout-minutes: 30
+        uses: blackduck-inc/black-duck-security-scan@805cbd09e806b01907bbea0f990723c2bb85abe9 # v1.2.3
+        with:
+          blackduck_url: ${{ vars.BLACKDUCKSCA_URL }}
+          blackduck_api_token: ${{ secrets.BLACKDUCKSCA_TOKEN }}
 
 jobs:
   build:

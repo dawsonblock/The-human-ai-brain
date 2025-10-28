@@ -22,10 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
+        contents: read
+        security-events: write
       - name: Black Duck SCA scan
         timeout-minutes: 30
         uses: blackduck-inc/black-duck-security-scan@805cbd09e806b01907bbea0f990723c2bb85abe9 # v1.2.3

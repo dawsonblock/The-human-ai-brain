@@ -53,7 +53,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          az acr build \
+          # Ensure az is authenticated in this shell
+          if ! az account show >/dev/null 2>&1; then
+            echo "Azure CLI not logged in; attempting device-less login via OIDC context..."
+            az login --identity >/dev/null 2>&1 || true
+          fi
+          az acr login --name "${{ env.AZURE_CONTAINER_REGISTRY }}"
             --image "${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_NAME }}:${{ github.sha }}" \
             --registry "${{ env.AZURE_CONTAINER_REGISTRY }}" \
             -g "${{ env.RESOURCE_GROUP }}" \

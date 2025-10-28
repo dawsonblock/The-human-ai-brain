@@ -1,0 +1,52 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+# Black Duck Security Action allows you to integrate Static Analysis Security Testing (SAST) and Software Composition Analysis (SCA) into your CI/CD pipelines.
+# For more information about configuring your workflow,
+# read our documentation at https://github.com/blackduck-inc/black-duck-security-scan
+
+name: CI Black Duck security scan
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '34 12 * * 6'
+jobs:
+  build:
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+        contents: read
+        security-events: write
+      - name: Black Duck SCA scan
+        timeout-minutes: 30
+        uses: blackduck-inc/black-duck-security-scan@805cbd09e806b01907bbea0f990723c2bb85abe9 # v1.2.3
+        with:
+          blackduck_url: ${{ vars.BLACKDUCKSCA_URL }}
+          blackduck_api_token: ${{ secrets.BLACKDUCKSCA_TOKEN }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      security-events: write
+      actions: read
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Black Duck SCA scan
+        uses: blackduck-inc/black-duck-security-scan@805cbd09e806b01907bbea0f990723c2bb85abe9 # v1.2.3
+        with:
+          ### ---------- BLACKDUCK SCA SCANNING: REQUIRED FIELDS ----------
+          blackduck_url: ${{ vars.BLACKDUCKSCA_URL }}
+          blackduck_api_token: ${{ secrets.BLACKDUCKSCA_TOKEN }}
+

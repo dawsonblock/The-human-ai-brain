@@ -84,8 +84,6 @@ jobs:
           manifests: ${{ env.DEPLOYMENT_MANIFEST_PATH }}
           images: |
             ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_NAME }}:${{ github.sha }}
-          admin: 'false'
-          use-kubelogin: 'true'
       - name: Deploys application
         uses: Azure/k8s-deploy@v4
         with:

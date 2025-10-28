@@ -1,8 +1,11 @@
+#include <sstream>
 #include "brain/qw.hpp"
 #include "brain/metrics.hpp"
+#include "brain/simple_metrics.hpp"
 #include <cmath>
 #include <algorithm>
 #include <iostream>
+#include <thread>
 
 namespace hab {
 
@@ -110,7 +113,7 @@ void QuantumWorkspace::evolve_lindblad(Scalar dt) {
 
 void QuantumWorkspace::check_collapse() {
     // Entropy-based collapse
-    if (state_.entropy >= config_.entropy_cap) {
+    if (state_.entropy >= config_.entropy_threshold) {
         perform_collapse();
         return;
     }
@@ -165,8 +168,8 @@ Scalar QuantumWorkspace::compute_von_neumann_entropy() const {
     
     Scalar entropy = 0.0;
     for (int i = 0; i < eigenvalues.size(); ++i) {
-        Scalar lambda = std::max(config_.eigen_floor, eigenvalues(i));
-        if (lambda > config_.eigen_floor) {
+        Scalar lambda = std::max(config_.eigenvalue_floor, eigenvalues(i));
+        if (lambda > config_.eigenvalue_floor) {
             entropy -= lambda * std::log(lambda);
         }
     }
@@ -183,7 +186,7 @@ void QuantumWorkspace::enforce_hermiticity() {
 void QuantumWorkspace::enforce_trace_one() {
     Scalar trace = state_.rho.trace().real();
     
-    if (std::abs(trace - 1.0) > config_.trace_tol) {
+    if (std::abs(trace - 1.0) > config_.trace_tolerance) {
         state_.rho /= trace;
     }
     
@@ -199,8 +202,8 @@ void QuantumWorkspace::enforce_psd() {
     
     // Floor negative eigenvalues
     for (int i = 0; i < eigenvalues.size(); ++i) {
-        if (eigenvalues(i) < config_.eigen_floor) {
-            eigenvalues(i) = config_.eigen_floor;
+        if (eigenvalues(i) < config_.eigenvalue_floor) {
+            eigenvalues(i) = config_.eigenvalue_floor;
         }
     }
     
@@ -268,6 +271,99 @@ void QuantumWorkspace::reset() {
     state_.collapsed_quale = -1;
     state_.last_collapse = std::chrono::steady_clock::now();
     state_.sim_time_at_last_collapse = sim_time_;
+}
+
+} // namespace hab
+
+// QWConfig validation methods (in hab namespace)
+namespace hab {
+
+bool QWConfig::validate() const {
+    return validation_error().empty();
+}
+
+std::string QWConfig::validation_error() const {
+    std::ostringstream oss;
+    
+    // Dimension must be >= 2
+    if (dimension < 2) {
+        oss << "dimension must be >= 2, got " << dimension << "; ";
+    }
+    
+    // dt must be in valid range
+    if (dt <= 0.0 || dt > 0.1) {
+        oss << "dt must be in range (0, 0.1], got " << dt << "; ";
+    }
+    
+    // Decoherence rate must be non-negative
+    if (decoherence_rate < 0.0) {
+        oss << "decoherence_rate must be >= 0, got " << decoherence_rate << "; ";
+    }
+    
+    // Entropy threshold must be reasonable
+    double max_entropy = std::log(static_cast<double>(dimension));
+    if (entropy_threshold < 0.0 || entropy_threshold > max_entropy * 1.1) {
+        oss << "entropy_threshold must be in [0, " << (max_entropy * 1.1) 
+            << "], got " << entropy_threshold << "; ";
+    }
+    
+    // Tolerance parameters must be positive and reasonable
+    if (trace_tolerance <= 0.0 || trace_tolerance > 1e-3) {
+        oss << "trace_tolerance must be in (0, 1e-3], got " << trace_tolerance << "; ";
+    }
+    
+    if (eigenvalue_floor <= 0.0 || eigenvalue_floor > 1e-6) {
+        oss << "eigenvalue_floor must be in (0, 1e-6], got " << eigenvalue_floor << "; ";
+    }
+    
+    // Max dwell time must be reasonable
+    if (max_dwell_ms < 10.0 || max_dwell_ms > 1000.0) {
+        oss << "max_dwell_ms must be in [10, 1000], got " << max_dwell_ms << "; ";
+    }
+    
+    // Collapse rate target must be positive
+    if (collapse_rate_target_hz <= 0.0) {
+        oss << "collapse_rate_target_hz must be positive, got " << collapse_rate_target_hz << "; ";
+    }
+    
+    return oss.str();
+}
+
+// Enable multi-threading for Eigen operations
+void QuantumWorkspace::enable_threading(int num_threads) {
+    if (num_threads < 0) {
+        // Use all available hardware threads
+        num_threads = std::thread::hardware_concurrency();
+    }
+    Eigen::setNbThreads(num_threads);
+}
+
+
+void QuantumWorkspace::step_ticks_with_metrics(int num_ticks) {
+    METRIC_TIMER("brain_step_latency_ms");
+    
+    for (int i = 0; i < num_ticks; ++i) {
+        evolve_lindblad(config_.dt);
+        enforce_hermiticity();
+        enforce_trace_one();
+        enforce_psd();
+        
+        state_.entropy = compute_von_neumann_entropy();
+        sim_time_ += config_.dt;
+        
+        METRIC_GAUGE("brain_entropy", state_.entropy);
+        METRIC_GAUGE("brain_sim_time_seconds", sim_time_);
+        
+        check_collapse();
+        
+        if (state_.is_collapsed) {
+            METRIC_COUNTER("brain_collapses_total", 1.0);
+            METRIC_GAUGE("brain_collapsed_quale", static_cast<double>(state_.collapsed_quale));
+        }
+        
+        tick_count_++;
+        METRIC_COUNTER("brain_steps_total", 1.0);
+    }
 }
 
 } // namespace hab

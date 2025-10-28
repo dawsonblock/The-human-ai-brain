@@ -1,0 +1,232 @@
+{
+  "comment": "HAB Brain System - Production Seccomp Profile",
+  "description": "Restricts syscalls to essential operations only. Blocks dangerous operations like execve, ptrace, and module loading.",
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "defaultErrnoRet": 1,
+  "architectures": [
+    "SCMP_ARCH_X86_64",
+    "SCMP_ARCH_X86",
+    "SCMP_ARCH_X32"
+  ],
+  "syscalls": [
+    {
+      "comment": "Core file operations",
+      "names": [
+        "read",
+        "write",
+        "open",
+        "openat",
+        "close",
+        "stat",
+        "fstat",
+        "lstat",
+        "access",
+        "faccessat",
+        "faccessat2",
+        "lseek",
+        "readv",
+        "writev",
+        "pread64",
+        "pwrite64",
+        "readlink",
+        "readlinkat",
+        "getcwd",
+        "chdir",
+        "fchdir",
+        "mkdir",
+        "mkdirat",
+        "rmdir",
+        "unlink",
+        "unlinkat",
+        "rename",
+        "renameat",
+        "renameat2"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    },
+    {
+      "comment": "Memory management",
+      "names": [
+        "brk",
+        "mmap",
+        "mmap2",
+        "munmap",
+        "mremap",
+        "mprotect",
+        "madvise",
+        "mlock",
+        "mlock2",
+        "munlock",
+        "mlockall",
+        "munlockall"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    },
+    {
+      "comment": "Process management (restricted)",
+      "names": [
+        "getpid",
+        "getppid",
+        "gettid",
+        "getuid",
+        "geteuid",
+        "getgid",
+        "getegid",
+        "getgroups",
+        "getpgid",
+        "getpgrp",
+        "getsid",
+        "exit",
+        "exit_group",
+        "wait4",
+        "waitid",
+        "clone",
+        "clone3",
+        "fork",
+        "vfork",
+        "set_robust_list",
+        "get_robust_list"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    },
+    {
+      "comment": "Threading and synchronization",
+      "names": [
+        "futex",
+        "futex_waitv",
+        "set_tid_address",
+        "set_thread_area",
+        "get_thread_area",
+        "tgkill",
+        "rt_sigaction",
+        "rt_sigprocmask",
+        "rt_sigreturn",
+        "sigaltstack",
+        "pause",
+        "nanosleep",
+        "clock_nanosleep"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    },
+    {
+      "comment": "Networking (for gRPC and metrics server)",
+      "names": [
+        "socket",
+        "socketpair",
+        "bind",
+        "listen",
+        "accept",
+        "accept4",
+        "connect",
+        "getsockname",
+        "getpeername",
+        "sendto",
+        "recvfrom",
+        "sendmsg",
+        "recvmsg",
+        "setsockopt",
+        "getsockopt",
+        "shutdown",
+        "poll",
+        "ppoll",
+        "select",
+        "pselect6",
+        "epoll_create",
+        "epoll_create1",
+        "epoll_ctl",
+        "epoll_wait",
+        "epoll_pwait",
+        "epoll_pwait2"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    },
+    {
+      "comment": "Time operations",
+      "names": [
+        "time",
+        "gettimeofday",
+        "clock_gettime",
+        "clock_getres",
+        "times"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    },
+    {
+      "comment": "I/O multiplexing",
+      "names": [
+        "eventfd",
+        "eventfd2",
+        "pipe",
+        "pipe2",
+        "dup",
+        "dup2",
+        "dup3",
+        "fcntl",
+        "ioctl",
+        "flock"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    },
+    {
+      "comment": "Resource limits and info",
+      "names": [
+        "getrlimit",
+        "setrlimit",
+        "prlimit64",
+        "getrusage",
+        "uname",
+        "sysinfo",
+        "prctl"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    },
+    {
+      "comment": "Essential system calls",
+      "names": [
+        "arch_prctl",
+        "restart_syscall",
+        "getrandom"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    }
+  ],
+  "blocked_syscalls": [
+    {
+      "comment": "Block dangerous operations",
+      "names": [
+        "execve",
+        "execveat",
+        "ptrace",
+        "kexec_load",
+        "kexec_file_load",
+        "init_module",
+        "finit_module",
+        "delete_module",
+        "iopl",
+        "ioperm",
+        "create_module",
+        "get_kernel_syms",
+        "query_module",
+        "syslog",
+        "uselib",
+        "_sysctl",
+        "acct",
+        "pivot_root",
+        "mount",
+        "umount",
+        "umount2",
+        "swapon",
+        "swapoff",
+        "reboot",
+        "setns",
+        "unshare",
+        "perf_event_open",
+        "bpf",
+        "userfaultfd",
+        "process_vm_readv",
+        "process_vm_writev",
+        "kcmp"
+      ]
+    }
+  ]
+}

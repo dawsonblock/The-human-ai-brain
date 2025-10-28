@@ -34,6 +34,9 @@ jobs:
   working-directory: ${{ github.workspace }}/build
   run: ctest --output-on-failure -V
 
+    - name: Prepare build directory
+      run: mkdir -p ${{ github.workspace }}/build
+
     - name: Cache build
       uses: actions/cache@v4
       with:

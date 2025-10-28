@@ -50,8 +50,15 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: Build and push image to ACR
+        shell: bash
         run: |
-          az acr build --image ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_NAME }}:${{ github.sha }} --registry ${{ env.AZURE_CONTAINER_REGISTRY }} -g ${{ env.RESOURCE_GROUP }} .
+          set -euo pipefail
+          az acr login --name "${{ env.AZURE_CONTAINER_REGISTRY }}"
+          az acr build \
+            --image "${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_NAME }}:${{ github.sha }}" \
+            --registry "${{ env.AZURE_CONTAINER_REGISTRY }}" \
+            -g "${{ env.RESOURCE_GROUP }}" \
+            .
   deploy:
     if: ${{ github.event_name != 'pull_request' && github.repository_owner == github.actor }}
     permissions:

@@ -31,8 +31,8 @@ jobs:
     - name: Configure CMake
       run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
 
-    - name: Prepare build directory
-      run: mkdir -p ${{ github.workspace }}/build
+  working-directory: ${{ github.workspace }}/build
+  run: ctest --output-on-failure -V
 
     - name: Cache build
       uses: actions/cache@v4

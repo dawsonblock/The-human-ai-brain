@@ -148,7 +148,14 @@ jobs:
         uses: azure/use-kubelogin@v1
 
       # Retrieves your Azure Kubernetes Service cluster's kubeconfig file
-      - name: Get K8s context
+      - name: Validate manifest path
+        run: |
+          set -euo pipefail
+          if [ ! -f "${{ env.DEPLOYMENT_MANIFEST_PATH }}" ] && [ ! -d "${{ env.DEPLOYMENT_MANIFEST_PATH }}" ]; then
+            echo "ERROR: DEPLOYMENT_MANIFEST_PATH '${{ env.DEPLOYMENT_MANIFEST_PATH }}' not found."
+            exit 1
+          fi
+      - name: Deploys application
         uses: azure/aks-set-context@v3
         with:
           resource-group: ${{ env.RESOURCE_GROUP }}

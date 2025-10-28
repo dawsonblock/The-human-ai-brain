@@ -53,7 +53,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          az acr login --name "${{ env.AZURE_CONTAINER_REGISTRY }}"
           az acr build \
             --image "${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_NAME }}:${{ github.sha }}" \
             --registry "${{ env.AZURE_CONTAINER_REGISTRY }}" \

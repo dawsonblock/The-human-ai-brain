@@ -148,10 +148,25 @@ jobs:
           resource-group: ${{ env.RESOURCE_GROUP }}
           cluster-name: ${{ env.CLUSTER_NAME }}
           admin: 'false'
-          use-kubelogin: 'true'
-      - name: Validate manifest path
-        run: |
-          set -euo pipefail
+              set -euo pipefail
+              PATH_VAL="${{ env.DEPLOYMENT_MANIFEST_PATH }}"
+              if [ -z "${PATH_VAL}" ]; then
+                echo "ERROR: DEPLOYMENT_MANIFEST_PATH is empty."
+                exit 1
+              fi
+              if [ -f "${PATH_VAL}" ]; then
+                case "${PATH_VAL}" in
+                  *.yml|*.yaml) : ;;
+                  *) echo "ERROR: DEPLOYMENT_MANIFEST_PATH '${PATH_VAL}' is a file but not a .yml/.yaml."; exit 1;;
+                esac
+              elif [ -d "${PATH_VAL}" ]; then
+                if ! find "${PATH_VAL}" -type f \( -name "*.yml" -o -name "*.yaml" \) | grep -q .; then
+                  echo "ERROR: DEPLOYMENT_MANIFEST_PATH directory '${PATH_VAL}' contains no .yml/.yaml files."
+                  exit 1
+                fi
+              else
+                echo "ERROR: DEPLOYMENT_MANIFEST_PATH '${PATH_VAL}' not found."
+                exit 1
           if [ ! -f "${{ env.DEPLOYMENT_MANIFEST_PATH }}" ] && [ ! -d "${{ env.DEPLOYMENT_MANIFEST_PATH }}" ]; then
             echo "ERROR: DEPLOYMENT_MANIFEST_PATH '${{ env.DEPLOYMENT_MANIFEST_PATH }}' not found."
             exit 1
